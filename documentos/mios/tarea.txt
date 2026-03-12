@@ -1,0 +1,6 @@
+Diagrama de microservicios. ✔
+vamos a empezar con el servicio de "listings" 
+crud de listings con la estructura de datos de mi produtos (es todas las caracteristicas del listing) 
+con buen manejo de errores y sanitizar los datos 
+en el mismo servidor de listing e imagenes va junto.
+**despues de esto va imagenes** 

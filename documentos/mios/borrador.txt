@@ -1,0 +1,15 @@
+**caracteristica del carro en la tarjeta de publicación (del listado)**
+
+foto (no se si seria necesario colocarla como caracteristica)
+year: año de fabricación del carro.
+brand: marca del carro.
+model: modelo del carro.
+mileage: cantidad de millas recorridas por el carro.
+price: precio del carro.
+
+**caracteristicas del carro en la ficha de publicación**
+
+drive train: tipo de tracción del carro.
+fuel type: tipo de combustible que utiliza el carro.
+vin number: número de identificación del vehículo.
+description: descripción detallada del carro.
