@@ -1,0 +1,2 @@
+1) Quiero hacer mi rutas y mi API sin el /api
+es buena idea? 
