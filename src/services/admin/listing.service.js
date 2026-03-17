@@ -6,7 +6,7 @@ class ListingService {
     this.currentId = 1;
   }
 
-  // Crear un nuevo listing 
+  // Crear un nuevo listing
   async create({ year, brand, model, mileage, price, drive_train, fuel_type, vin_number, description, photos }) {
     const listing = {
       id: this.currentId++,
@@ -29,6 +29,20 @@ class ListingService {
 
     return listing;
   }
+
+
+  // Obtener todos los listings
+  async getAll() {
+    return this.listings;
+  }
+
+
+  // Obtener un listing por ID
+  async getById(id) {
+    const listing = this.listings.find(listing => listing.id === id);
+    return listing || null;
+  }
+
 
   // Actualizar un listing existente por ID
   async update(id, { year, brand, model, mileage, price, drive_train, fuel_type, vin_number, description, photos }) {
@@ -60,6 +74,22 @@ class ListingService {
     console.log('Listing updated:', updated);
 
     return updated;
+  }
+
+  // Eliminar un listing por ID
+  async delete(id) {
+    const index = this.listings.findIndex(listing => listing.id === id);
+
+    if (index === -1) {
+      return null;
+    }
+
+    // Elimina 1 elemento en la posición encontrada y lo retorna
+    const deleted = this.listings.splice(index, 1)[0];
+
+    console.log('Listing deleted:', deleted);
+
+    return deleted;
   }
 
 }
