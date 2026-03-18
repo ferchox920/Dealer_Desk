@@ -1,2 +1,5 @@
 1) Quiero hacer mi rutas y mi API sin el /api
 es buena idea? 
+2) No veo buena idea seguir sin BBDD ya que tendria que
+volver a tocar todo.
+

@@ -1,6 +1,6 @@
 import express from 'express';
-import { validateCreateListing, validateListingId } from '../../validations/listing.validation.js';
-import listingService from '../../services/admin/listing.service.js';
+import { validateCreateListing, validateListingId } from '../../../validations/admin/listings/listing.validation.js';
+import listingService from '../../../services/admin/listings/listing.service.js';
 
 const listingRoutes = express.Router();
 
