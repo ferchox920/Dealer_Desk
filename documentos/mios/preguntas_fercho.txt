@@ -2,4 +2,4 @@
 es buena idea? 
 2) No veo buena idea seguir sin BBDD ya que tendria que
 volver a tocar todo.
-
+3) Ayudame con la arquitectura de las carpetas, no se si esta bien o no.

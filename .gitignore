@@ -57,3 +57,5 @@ Thumbs.db
 # TypeScript (if used later)
 
 *.tsbuildinfo
+
+.preguntas_fercho.txt
