@@ -4,3 +4,12 @@ crud de listings con la estructura de datos de mi produtos (es todas las caracte
 con buen manejo de errores y sanitizar los datos ✔
 en el mismo servidor de listing e imagenes va junto.
 **despues de esto va imagenes** 
+
+
+// 18-03
+todo conectado a la BBD y crear sus entidades
+voy a tratar los listings como products.
+
+
+
+

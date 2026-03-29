@@ -13,3 +13,9 @@ drive train: tipo de tracción del carro.
 fuel type: tipo de combustible que utiliza el carro.
 vin number: número de identificación del vehículo.
 description: descripción detallada del carro.
+
+25/03/2026 {
+  *Me falta agregar cloudinary.
+  *Acomodar las rutas del Postman.
+  *Probar la BBDD con Postman.
+}
