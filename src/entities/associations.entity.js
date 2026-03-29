@@ -1,5 +1,5 @@
-import Product from './product.js';
-import ProductImage from './product-image.js';
+import Product from './product.entity.js';
+import ProductImage from './product-image.entity.js';
 
 // Product 1:N ProductImage (diagrama: listings → listings_images)
 Product.hasMany(ProductImage, { foreignKey: 'product_id', as: 'images', onDelete: 'CASCADE' });

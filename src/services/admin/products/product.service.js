@@ -1,5 +1,5 @@
-import Product from '../../../entities/product.js';
-import ProductImage from '../../../entities/product-image.js';
+import Product from '../../../entities/product.entity.js';
+import ProductImage from '../../../entities/product-image.entity.js';
 import cloudinary from '../../../config/cloudinary/cloudinary.js';
 
 class ProductService {
