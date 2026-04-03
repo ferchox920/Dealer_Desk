@@ -1,3 +1,12 @@
+// ============================================================================
+// product.routes.js
+//
+// Endpoints HTTP para productos (CRUD completo).
+// Todas las rutas están bajo /products.
+//
+// Cada ruta valida entrada y delega al service.
+// ============================================================================
+
 import express from "express";
 import {
   validateCreateProduct,

@@ -2,14 +2,21 @@ Diagrama de microservicios. ✔
 vamos a empezar con el servicio de "listings" ✔
 crud de listings con la estructura de datos de mi produtos (es todas las caracteristicas del listing) ✔
 con buen manejo de errores y sanitizar los datos ✔
-en el mismo servidor de listing e imagenes va junto.
-**despues de esto va imagenes** 
+en el mismo servidor de listing e imagenes va junto.✔
+**despues de esto va imagenes** ✔
 
 
 // 18-03
-todo conectado a la BBD y crear sus entidades
-voy a tratar los listings como products.
+todo conectado a la BBD y crear sus entidades ✔
+voy a tratar los listings como products. ✔
 
+
+03-04-2026 {
+  *Vamos a crear el servicio de administrador es el encargado de crear los usuarios
+  gestores de cada sistema, (evaluar si usuario y administrador vale la pena que este
+  en servicios separados o no) 
+  *donde vamos a desencriptar los tokens?
+}
 
 
 
