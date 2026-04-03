@@ -4,6 +4,7 @@ import cloudinary from '../../../config/cloudinary/cloudinary.js';
 
 class ProductService {
 
+  // Le falta la lógica de validación de datos (ej: año no puede ser futuro, precio positivo, etc) que se puede agregar en el controller o en un service aparte
   async create(data) {
     return await Product.create(data);
   }

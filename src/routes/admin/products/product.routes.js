@@ -4,8 +4,6 @@ import {
   validateProductId,
 } from "../../../utils/validations/admin/products/product.validation.js";
 import productService from "../../../services/admin/products/product.service.js";
-import { validatorBodyCreateError } from "../../../utils/errors/handlerError.js";
-
 
 const productRoutes = express.Router();
 
@@ -13,7 +11,6 @@ const productRoutes = express.Router();
 productRoutes.post(
   "/products",
   validateCreateProduct,
-  validatorBodyCreateError,
   async (req, res) => {
     try {
       const product = await productService.create(req.body);

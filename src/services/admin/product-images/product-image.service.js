@@ -10,14 +10,18 @@ class ProductImageService {
     if (!product) throw new Error('Product not found.');
 
     const images = [];
-
+    
     for (const file of files) {
-      // Subir buffer a Cloudinary como base64
+      // esto entre try y catch para manejar errores individuales de subida sin afectar el batch completo
+      // Si hay un error en la subida de la imagen hacia cloudinary entonces rollback
       const result = await cloudinary.uploader.upload(
+      // Subir buffer a Cloudinary como base64
         `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
+        // Las carpetas del producto tengan su propia carpetas segun productos y empresas
         { folder: 'dealer_desk/products' }
       );
-
+      // tambien try catch
+      // crear un pool de conexiones a DB (pa subir todo en un llamado)
       const image = await ProductImage.create({
         product_id: productId,
         cloudinary_public_id: result.public_id,
@@ -28,7 +32,6 @@ class ProductImageService {
 
       images.push(image);
     }
-
     return images;
   }
 

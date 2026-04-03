@@ -21,7 +21,7 @@ const ProductImage = sequelize.define(
     },
     cloudinary_public_id: {
       type: DataTypes.STRING,
-      allowNull: false, // ID único en Cloudinary (necesario para eliminar/transformar)
+      allowNull: false, // ID único en Cloudinary (necesario para eliminar/actualizar la imagen)
     },
     url: {
       type: DataTypes.STRING,
