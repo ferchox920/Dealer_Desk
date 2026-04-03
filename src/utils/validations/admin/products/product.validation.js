@@ -1,17 +1,27 @@
+// ============================================================================
+// product.validation.js
+//
+// Middlewares de validación para las rutas de productos.
+// Valida tipos de datos en el body y formato UUID en params.
+// ============================================================================
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Valida que un campo del body sea string (si fue enviado)
 function validateString(body, field, errors) {
   if (body[field] !== undefined && typeof body[field] !== 'string') {
     errors.push({ code: `PRODUCT_${field.toUpperCase()}_NOT_STRING`, field, message: `The ${field} must be a string.` });
   }
 }
 
+// Valida que un campo del body sea number (si fue enviado)
 function validateNumber(body, field, errors) {
   if (body[field] !== undefined && typeof body[field] !== 'number') {
     errors.push({ code: `PRODUCT_${field.toUpperCase()}_NOT_NUMBER`, field, message: `The ${field} must be a number.` });
   }
 }
 
+// Middleware: valida los campos del body para crear/actualizar un producto
 function validateCreateProduct(req, res, next) {
   const errors = [];
   const body = req.body;
@@ -34,6 +44,7 @@ function validateCreateProduct(req, res, next) {
   next();
 }
 
+// Middleware: valida que :id en la URL sea un UUID válido
 function validateProductId(req, res, next) {
   const { id } = req.params;
 

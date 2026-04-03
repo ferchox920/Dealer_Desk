@@ -1,6 +1,16 @@
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// ============================================================================
+// product-image.validation.js
+//
+// Middlewares de validación para las rutas de imágenes de productos.
+// Se ejecutan ANTES de que el request llegue al service.
+// Si algo es inválido, responden 400 inmediatamente.
+//
+// Estos middlewares son funciones (req, res, next):
+//   - Si todo está bien → llaman next() y sigue al siguiente middleware/handler
+//   - Si hay error → responden con JSON y el request se detiene ahí
+// ============================================================================
 
-// --- Helpers reutilizables para validar tipos en el body ---
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function validateNumber(body, field, errors) {
   if (body[field] !== undefined && typeof body[field] !== 'number') {
