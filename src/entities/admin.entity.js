@@ -34,7 +34,7 @@ const Admin = sequelize.define(
     tableName: "admins",
     timestamps: true,
     createdAt: "created_at",
-    updatedAt: false, // no rastreamos cuándo se editó un admin
+    updatedAt: "updated_at", // rastreamos cuándo se editó un admin
   },
 );
 
