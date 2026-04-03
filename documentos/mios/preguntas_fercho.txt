@@ -6,4 +6,5 @@ volver a tocar todo.
 4) En lo de images le meti full IA porque no le encontre mucho sentido en este momento ya que este no lo puedo probar tan facil.
 
 segunda tanda de preguntas:
-1) Las tablas en singular o plural?
+1) Las tablas en **singular o plural?
+2) Tengo owner y staff, pero no superAdmin.

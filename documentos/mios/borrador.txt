@@ -19,3 +19,12 @@ description: descripción detallada del carro.
   *Acomodar las rutas del Postman.
   *Probar la BBDD con Postman.
 }
+
+
+03-04-2026 {
+  *Vamos a crear el servicio de administrador es el encargado de crear los usuarios
+  gestores de cada sistema, (evaluar si usuario y administrador vale la pena que este
+  en servicios separados o no) 
+  *donde vamos a desencriptar los tokens?
+  
+}
