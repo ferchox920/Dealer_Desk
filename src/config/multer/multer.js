@@ -1,3 +1,18 @@
+// ============================================================================
+// multer.js
+//
+// Configuración de Multer para la subida de archivos.
+//
+// Multer es un middleware de Express que procesa archivos enviados
+// en requests multipart/form-data (lo que usa un <input type="file">).
+//
+// Configuración actual:
+//   - Almacenamiento en MEMORIA (no en disco): el archivo queda en un buffer
+//     temporal que se envía directo a Cloudinary sin tocar el filesystem
+//   - Máximo 5MB por imagen
+//   - Solo acepta JPEG, PNG y WEBP
+// ============================================================================
+
 import multer from "multer";
 
 // Almacenamiento en memoria: el archivo NO se guarda en disco,

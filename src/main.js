@@ -1,14 +1,21 @@
+// ============================================================================
+// main.js - Punto de entrada del servidor
+//
+// 1. Carga variables de entorno (.env)
+// 2. Registra middlewares globales (CORS, JSON parser, Morgan logger)
+// 3. Monta las rutas
+// 4. Conecta a PostgreSQL y sincroniza tablas
+// 5. Inicia el servidor en el puerto configurado
+// ============================================================================
+
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
-import sequelize from './config/db/db.js';
-import './entities/associations.entity.js';
-import './entities/admin.entity.js';
+import db from './config/db/db.js';
 import pruebaRoutes from './routes/prueba.routes.js';
 import productRoutes from './routes/admin/products/product.routes.js';
 import productImageRoutes from './routes/admin/product-images/product-image.routes.js';
-
 
 const expressApp = express();
 
@@ -24,29 +31,26 @@ const PORT = process.env.PORT || 3000;
 
 async function startServer() {
   try {
-    await sequelize.authenticate();
-    console.log('✅ Conexión a la base de datos establecida.');
+    await db.authenticate();
+    console.log('Conexion a la base de datos establecida.');
 
-    // Sincronizar la base de datos con las entidades definidas
-    // - DEV: alter=true (conveniente)
-    // - PROD: sync "seguro" por defecto (crea tablas si faltan, sin ALTER automático)
-    const syncMode = (process.env.DB_SYNC_MODE || (process.env.NODE_ENV === 'production' ? 'safe' : 'alter')).toLowerCase();
+    // Usa DB_SYNC_MODE=force solo cuando quieras borrar toda la BBDD y empezar de cero en desarrollo.
+    // En el dia a dia dejalo en safe para no perder datos al reiniciar el servidor.
+    const syncMode = (process.env.DB_SYNC_MODE || 'safe').toLowerCase();
+
     if (syncMode === 'force') {
-      await sequelize.sync({ force: true });
-      console.log('⚠️ DB sync FORCE (tablas recreadas).');
-    } else if (syncMode === 'alter') {
-      await sequelize.sync({ alter: true });
-      console.log('✅ DB sync ALTER completado.');
+      await db.sync({ force: true });
+      console.log('DB sync FORCE completado.');
     } else {
-      await sequelize.sync();
-      console.log('✅ DB sync SAFE completado.');
+      await db.sync();
+      console.log('DB sync SAFE completado.');
     }
 
     expressApp.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Error al iniciar el servidor:', error.message);
+    console.error('Error al iniciar el servidor:', error.message);
     process.exit(1);
   }
 }
