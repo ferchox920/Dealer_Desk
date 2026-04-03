@@ -1,38 +1,95 @@
+// ============================================================================
+// product-image.service.js
+//
+// Lógica de negocio para imágenes de productos.
+// Coordina entre Cloudinary (almacenamiento de archivos) y PostgreSQL (metadatos).
+//
+// Flujo de subida (create):
+//   1. Verifica que el producto exista
+//   2. Sube todas las imágenes a Cloudinary en paralelo (Promise.allSettled)
+//   3. Guarda todos los metadatos en PostgreSQL con UN solo INSERT (bulkCreate)
+//   4. Si algo falla, limpia Cloudinary y la transacción hace rollback
+//
+// Reglas de portada:
+//   - La primera imagen de un producto se marca automáticamente como portada
+//   - Si se elimina la portada, la siguiente imagen más antigua asume el rol
+//   - Si se cambia la portada, las demás se desmarcan (clearCoverByProductId)
+// ============================================================================
+
 import ProductImage from '../../../entities/product-image.entity.js';
 import Product from '../../../entities/product.entity.js';
 import cloudinary from '../../../config/cloudinary/cloudinary.js';
+import db from '../../../config/db/db.js';
+import { buildProductImagesFolder } from '../../../utils/cloudinary-folder.util.js';
 
 class ProductImageService {
 
-  // Sube archivos a Cloudinary y guarda los registros en la DB
-  async create(productId, files) {
+  // Estrategia actual:
+  // 1) subir varias imágenes a Cloudinary en paralelo (Promise.allSettled)
+  //    - allSettled NO falla si una imagen falla, las demás siguen subiendo
+  //    - después revisamos cuáles se subieron y cuáles no
+  // 2) guardar todos los metadatos en PostgreSQL con un solo INSERT masivo
+  //    - esto va dentro de db.withTransaction para que si falla, haga rollback
+  //    - executor = client.query.bind(client) para que las entities usen la transacción
+  // 3) si CUALQUIER subida falla, se borran las que sí se subieron de Cloudinary
+  //
+  // systemContext viene de los headers del gateway (x-system-slug, etc.)
+  // y se usa para organizar las carpetas en Cloudinary por dealer/sistema.
+  // Hoy llega vacío porque el gateway aún no envía esos headers,
+  // así que la carpeta cae en "default-system" (ver cloudinary-folder.util.js).
+  async create(productId, files, systemContext = {}) {
     const product = await Product.findByPk(productId);
     if (!product) throw new Error('Product not found.');
+    const folder = buildProductImagesFolder({ ...systemContext, productId });
 
-    const images = [];
-    
-    for (const file of files) {
-      // esto entre try y catch para manejar errores individuales de subida sin afectar el batch completo
-      // Si hay un error en la subida de la imagen hacia cloudinary entonces rollback
-      const result = await cloudinary.uploader.upload(
-      // Subir buffer a Cloudinary como base64
-        `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
-        // Las carpetas del producto tengan su propia carpetas segun productos y empresas
-        { folder: 'dealer_desk/products' }
-      );
-      // tambien try catch
-      // crear un pool de conexiones a DB (pa subir todo en un llamado)
-      const image = await ProductImage.create({
-        product_id: productId,
-        cloudinary_public_id: result.public_id,
-        url: result.secure_url,
-        sort_order: images.length,
-        is_cover: images.length === 0, // la primera imagen es portada por defecto
+    // Subida a Cloudinary: convierte cada archivo de memoria (buffer) a base64
+    // y lo sube. El formato data:mimetype;base64,... es lo que Cloudinary espera
+    // cuando no le das una URL ni un path de disco.
+    const uploadResults = await Promise.allSettled(
+      files.map((file) =>
+        cloudinary.uploader.upload(
+          `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
+          { folder }
+        ),
+      ),
+    );
+
+    // Separar exitosas de fallidas
+    const uploadedImages = uploadResults
+      .filter((result) => result.status === 'fulfilled')
+      .map((result) => result.value);
+
+    const failedUpload = uploadResults.find((result) => result.status === 'rejected');
+
+    try {
+      if (failedUpload) {
+        throw failedUpload.reason;
+      }
+
+      return await db.withTransaction(async (client) => {
+        const executor = client.query.bind(client);
+        const nextSortOrder = await ProductImage.countByProductId(productId, executor);
+        const hasExistingImages = nextSortOrder > 0;
+
+        const recordsToInsert = uploadedImages.map((result, index) => ({
+          product_id: productId,
+          cloudinary_public_id: result.public_id,
+          url: result.secure_url,
+          sort_order: nextSortOrder + index,
+          // Solo la primera imagen absoluta del producto queda como portada por defecto.
+          is_cover: !hasExistingImages && index === 0,
+        }));
+
+        return await ProductImage.bulkCreate(recordsToInsert, executor);
       });
+    } catch (error) {
+      // Si falla una subida o el INSERT masivo, limpiamos Cloudinary y la transaccion hace rollback.
+      await Promise.all(
+        uploadedImages.map((image) => cloudinary.uploader.destroy(image.public_id).catch(() => null)),
+      );
 
-      images.push(image);
+      throw error;
     }
-    return images;
   }
 
   // Obtiene todas las imágenes de un producto, ordenadas por posición en la galería
@@ -59,10 +116,18 @@ class ProductImageService {
     const image = await ProductImage.findByPk(imageId);
     if (!image) throw new Error('Image not found.');
     if (image.product_id !== productId) throw new Error('Image does not belong to this product.');
+
+    // Si una imagen pasa a ser portada, las demas del mismo producto dejan de serlo.
+    if (data.is_cover === true) {
+      await ProductImage.clearCoverByProductId(productId);
+    }
+
     return await image.update(data);
   }
 
-  // Elimina la imagen de Cloudinary y su registro en la DB
+  // Elimina la imagen de Cloudinary y su registro en la DB.
+  // Si la imagen eliminada era la portada, promueve automáticamente
+  // la primera imagen restante (por sort_order) como nueva portada.
   async delete(productId, imageId) {
     const image = await ProductImage.findByPk(imageId);
     if (!image) throw new Error('Image not found.');
@@ -70,6 +135,15 @@ class ProductImageService {
 
     await cloudinary.uploader.destroy(image.cloudinary_public_id);
     await image.destroy();
+
+    // Si se elimina la portada y aun quedan imagenes, promovemos la primera como nueva portada.
+    if (image.is_cover) {
+      const nextCover = await ProductImage.findFirstByProductId(productId);
+      if (nextCover) {
+        await nextCover.update({ is_cover: true });
+      }
+    }
+
     return image;
   }
 
