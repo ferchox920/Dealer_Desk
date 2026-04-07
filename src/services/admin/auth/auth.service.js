@@ -1,0 +1,226 @@
+// ============================================================================
+// auth.service.js
+//
+// Login base del panel admin.
+// Usa la tabla admins como fuente de owner/staff del sistema actual.
+// ============================================================================
+
+import { v4 as uuidv4 } from 'uuid';
+import db from '../../../config/db/db.js';
+import Admin from '../../../entities/admin.entity.js';
+import { createHttpError } from '../../../utils/errors/app-error.util.js';
+import { trimBoundaryWhitespace } from '../../../utils/normalizers/string-normalizer.util.js';
+import { verifyPassword } from '../../../utils/security/password.util.js';
+import {
+  generateOpaqueRefreshToken,
+  sha256,
+  signAccessToken,
+} from '../../../utils/security/token.util.js';
+
+function normalizeEmail(email) {
+  return trimBoundaryWhitespace(email).toLowerCase();
+}
+
+function normalizePassword(password) {
+  return trimBoundaryWhitespace(password);
+}
+
+function serializeAdmin(admin) {
+  return {
+    id: admin.id,
+    name: admin.name,
+    email: admin.email,
+    role: admin.role,
+    is_active: admin.is_active,
+    last_login_at: admin.last_login_at,
+    created_by_admin_id: admin.created_by_admin_id,
+    created_at: admin.created_at,
+    updated_at: admin.updated_at,
+  };
+}
+
+function buildRefreshTokenExpiryDate() {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + Number(process.env.REFRESH_TOKEN_TTL_DAYS || 30));
+  return expiresAt;
+}
+
+async function createRefreshSession(client, { adminId, refreshToken, userAgent, ipAddress, expiresAt }) {
+  const tokenHash = sha256(refreshToken);
+
+  await client.query(
+    `
+      INSERT INTO refresh_sessions (
+        id, admin_id, token_hash, user_agent, ip_address, expires_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `,
+    [
+      uuidv4(),
+      adminId,
+      tokenHash,
+      userAgent ?? null,
+      ipAddress ?? null,
+      expiresAt,
+    ],
+  );
+}
+
+async function findRefreshSessionForUpdate(client, refreshToken) {
+  const tokenHash = sha256(refreshToken);
+
+  const { rows } = await client.query(
+    `
+      SELECT id, admin_id, token_hash, expires_at, revoked_at
+      FROM refresh_sessions
+      WHERE token_hash = $1
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [tokenHash],
+  );
+
+  return rows[0] ?? null;
+}
+
+async function revokeRefreshSession(client, sessionId) {
+  await client.query(
+    `
+      UPDATE refresh_sessions
+      SET revoked_at = COALESCE(revoked_at, NOW()),
+          last_used_at = NOW()
+      WHERE id = $1
+    `,
+    [sessionId],
+  );
+}
+
+class AuthService {
+  async login({ email, password, userAgent, ipAddress }) {
+    // Normalizar el email evita bugs clásicos como:
+    // "Owner@Mail.com" vs "owner@mail.com".
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPassword = normalizePassword(password);
+    const admin = await Admin.findOneByEmail(normalizedEmail);
+
+    if (!admin || !admin.is_active) {
+      throw createHttpError(401, 'Invalid credentials.', 'AUTH_INVALID_CREDENTIALS');
+    }
+
+    const passwordOk = await verifyPassword(normalizedPassword, admin.password_hash);
+
+    if (!passwordOk) {
+      throw createHttpError(401, 'Invalid credentials.', 'AUTH_INVALID_CREDENTIALS');
+    }
+
+    const refreshToken = generateOpaqueRefreshToken();
+    const expiresAt = buildRefreshTokenExpiryDate();
+
+    await db.withTransaction(async (client) => {
+      await createRefreshSession(client, {
+        adminId: admin.id,
+        refreshToken,
+        userAgent,
+        ipAddress,
+        expiresAt,
+      });
+
+      // last_login_at te sirve luego para auditoría básica y para mostrar
+      // en el panel cuándo fue el último acceso del usuario.
+      await client.query(
+        `
+          UPDATE admins
+          SET last_login_at = NOW(),
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [admin.id],
+      );
+    });
+
+    const updatedAdmin = await Admin.findByPk(admin.id);
+
+    return {
+      accessToken: signAccessToken(updatedAdmin),
+      refreshToken,
+      admin: serializeAdmin(updatedAdmin),
+    };
+  }
+
+  async refresh({ refreshToken, userAgent, ipAddress }) {
+    if (!refreshToken) {
+      throw createHttpError(401, 'Refresh token required.', 'REFRESH_TOKEN_REQUIRED');
+    }
+
+    return await db.withTransaction(async (client) => {
+      const session = await findRefreshSessionForUpdate(client, refreshToken);
+
+      if (!session) {
+        throw createHttpError(401, 'Invalid refresh token.', 'REFRESH_TOKEN_INVALID');
+      }
+
+      if (session.revoked_at) {
+        throw createHttpError(401, 'Refresh token revoked.', 'REFRESH_TOKEN_REVOKED');
+      }
+
+      if (new Date(session.expires_at) <= new Date()) {
+        throw createHttpError(401, 'Refresh token expired.', 'REFRESH_TOKEN_EXPIRED');
+      }
+
+      const admin = await Admin.findByPk(session.admin_id);
+
+      if (!admin || !admin.is_active) {
+        throw createHttpError(401, 'Invalid session.', 'SESSION_INVALID');
+      }
+
+      const newRefreshToken = generateOpaqueRefreshToken();
+      const newExpiresAt = buildRefreshTokenExpiryDate();
+
+      // Rotación de refresh token:
+      // el token viejo se invalida y se crea uno nuevo.
+      // Esto reduce el tiempo de vida útil si el viejo se filtrara.
+      await revokeRefreshSession(client, session.id);
+      await createRefreshSession(client, {
+        adminId: admin.id,
+        refreshToken: newRefreshToken,
+        userAgent,
+        ipAddress,
+        expiresAt: newExpiresAt,
+      });
+
+      return {
+        accessToken: signAccessToken(admin),
+        refreshToken: newRefreshToken,
+        admin: serializeAdmin(admin),
+      };
+    });
+  }
+
+  async logout({ refreshToken }) {
+    if (!refreshToken) {
+      return;
+    }
+
+    await db.query(
+      `
+        UPDATE refresh_sessions
+        SET revoked_at = COALESCE(revoked_at, NOW()),
+            last_used_at = NOW()
+        WHERE token_hash = $1
+      `,
+      [sha256(refreshToken)],
+    );
+  }
+
+  async getCurrentAdmin(adminId) {
+    const admin = await Admin.findByPk(adminId);
+
+    if (!admin || !admin.is_active) {
+      throw createHttpError(404, 'Admin not found.', 'ADMIN_NOT_FOUND');
+    }
+
+    return serializeAdmin(admin);
+  }
+}
+
+export default new AuthService();
