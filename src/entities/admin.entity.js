@@ -12,6 +12,7 @@
 // ============================================================================
 
 import { v4 as uuidv4 } from 'uuid';
+import { OWNER_ROLE } from '../constants/admin-roles.js';
 import { query } from '../config/db/db.js';
 import {
   attachRecordMethods,
@@ -22,15 +23,18 @@ import {
 
 const ADMIN_SELECT = `
   id,
+  name,
   email,
   password_hash,
   role,
   is_active,
+  last_login_at,
+  created_by_admin_id,
   created_at,
   updated_at
 `;
 
-const MUTABLE_FIELDS = ['email', 'password_hash', 'role', 'is_active'];
+const MUTABLE_FIELDS = ['name', 'email', 'password_hash', 'role', 'is_active', 'last_login_at'];
 
 function hydrateAdmin(row) {
   if (!row) return null;
@@ -47,10 +51,13 @@ const Admin = {
   async create(data) {
     const insertData = {
       id: uuidv4(),
+      name: data.name ?? null,
       email: data.email,
       password_hash: data.password_hash,
       role: data.role,
       is_active: data.is_active ?? true,
+      last_login_at: data.last_login_at ?? null,
+      created_by_admin_id: data.created_by_admin_id ?? null,
     };
     const { columns, values, placeholders } = buildInsertParts(insertData);
 
@@ -85,21 +92,62 @@ const Admin = {
   },
 
   // Busca un admin por email (para login futuro).
-  // SQL: SELECT ... FROM admins WHERE email = $1 LIMIT 1
+  // SQL: SELECT ... FROM admins WHERE LOWER(email) = LOWER($1) LIMIT 1
   async findOneByEmail(email) {
-    const where = buildWhereEqualsClause({ email });
+    const { rows } = await query(
+      `
+        SELECT ${ADMIN_SELECT}
+        FROM admins
+        WHERE LOWER(email) = LOWER($1)
+        LIMIT 1
+      `,
+      [email],
+    );
+
+    return hydrateAdmin(rows[0]);
+  },
+
+  // Lista admins con filtros opcionales.
+  async findAll(filters = {}) {
+    const where = buildWhereEqualsClause({
+      role: filters.role,
+      is_active: filters.is_active,
+    });
+    const whereClause = where.clause ? `WHERE ${where.clause}` : '';
 
     const { rows } = await query(
       `
         SELECT ${ADMIN_SELECT}
         FROM admins
-        WHERE ${where.clause}
-        LIMIT 1
+        ${whereClause}
+        ORDER BY created_at DESC
       `,
       where.values,
     );
 
-    return hydrateAdmin(rows[0]);
+    return rows.map(hydrateAdmin);
+  },
+
+  // Cuenta owners activos, útil para no dejar el sistema sin dueño.
+  async countActiveOwners(options = {}) {
+    const values = [OWNER_ROLE, true];
+    let whereClause = 'role = $1 AND is_active = $2';
+
+    if (options.excludeId) {
+      values.push(options.excludeId);
+      whereClause += ` AND id <> $${values.length}`;
+    }
+
+    const { rows } = await query(
+      `
+        SELECT COUNT(*)::INT AS total
+        FROM admins
+        WHERE ${whereClause}
+      `,
+      values,
+    );
+
+    return rows[0]?.total ?? 0;
   },
 
   // Actualiza campos editables de un admin.
