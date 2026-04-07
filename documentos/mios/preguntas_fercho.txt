@@ -8,3 +8,10 @@ volver a tocar todo.
 segunda tanda de preguntas:
 1) Las tablas en **singular o plural?
 2) Tengo owner y staff, pero no superAdmin.
+
+05-04-2026 {
+  * No se si sea necesario agregar OTP.
+  * No se si estoy haciendo bien lo de los roles,
+  porque en este momento estoy permitiendo varios onwners.
+
+}

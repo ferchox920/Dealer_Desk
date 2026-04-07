@@ -10,7 +10,7 @@
 //   - Si hay error → responden con JSON y el request se detiene ahí
 // ============================================================================
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { createUuidParamValidator } from '../../shared/common.validation.js';
 
 function validateNumber(body, field, errors) {
   if (body[field] !== undefined && typeof body[field] !== 'number') {
@@ -52,17 +52,12 @@ function validateUpdateImage(req, res, next) {
   next();
 }
 
-// Valida que el parámetro :imageId sea un UUID válido
-function validateImageId(req, res, next) {
-  const { imageId } = req.params;
-
-  if (!imageId || !UUID_REGEX.test(imageId)) {
-    return res.status(400).json({ success: false, errors: [
-      { code: 'IMAGE_ID_INVALID', field: 'imageId', message: 'The imageId must be a valid UUID.' }
-    ]});
-  }
-
-  next();
-}
+// Igual que con products/users, el detalle de UUID queda concentrado
+// en common.validation.js para no repetir regex y mensajes.
+const validateImageId = createUuidParamValidator({
+  paramName: 'imageId',
+  code: 'IMAGE_ID_INVALID',
+  responseShape: 'success',
+});
 
 export { validateImageFiles, validateUpdateImage, validateImageId };

@@ -5,7 +5,7 @@
 // Valida tipos de datos en el body y formato UUID en params.
 // ============================================================================
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { createUuidParamValidator } from '../../shared/common.validation.js';
 
 // Valida que un campo del body sea string (si fue enviado)
 function validateString(body, field, errors) {
@@ -44,17 +44,11 @@ function validateCreateProduct(req, res, next) {
   next();
 }
 
-// Middleware: valida que :id en la URL sea un UUID válido
-function validateProductId(req, res, next) {
-  const { id } = req.params;
-
-  if (!id || !UUID_REGEX.test(id)) {
-    return res.status(400).json({ success: false, errors: [
-      { code: 'PRODUCT_ID_INVALID', field: 'id', message: 'The id must be a valid UUID.' }
-    ]});
-  }
-
-  next();
-}
+// Reutilizamos el helper compartido para que la regla UUID viva en un solo sitio.
+const validateProductId = createUuidParamValidator({
+  paramName: 'id',
+  code: 'PRODUCT_ID_INVALID',
+  responseShape: 'success',
+});
 
 export { validateCreateProduct, validateProductId };

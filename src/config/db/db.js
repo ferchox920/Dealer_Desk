@@ -19,8 +19,10 @@
 // ============================================================================
 
 import pg from 'pg';
+import { getAdminRolesSqlList } from '../../constants/admin-roles.js';
 
 const { Pool } = pg;
+const ADMIN_ROLES_SQL_LIST = getAdminRolesSqlList();
 
 const pool = new Pool({
   database: process.env.DB_NAME || 'dealer_desk',
@@ -88,6 +90,7 @@ async function authenticate() {
 // Borra las tablas en orden correcto (primero las que tienen foreign keys).
 // Solo se usa cuando DB_SYNC_MODE=force.
 async function dropSchema(client) {
+  await client.query('DROP TABLE IF EXISTS refresh_sessions');
   await client.query('DROP TABLE IF EXISTS product_images');
   await client.query('DROP TABLE IF EXISTS products');
   await client.query('DROP TABLE IF EXISTS admins');
@@ -100,14 +103,59 @@ async function ensureTables(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS admins (
       id UUID PRIMARY KEY,
+      name VARCHAR(255),
       email VARCHAR(255) NOT NULL UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
-      role VARCHAR(50) NOT NULL CHECK (role IN ('owner', 'staff')),
+      role VARCHAR(50) NOT NULL CONSTRAINT admins_role_check CHECK (role IN (${ADMIN_ROLES_SQL_LIST})),
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      last_login_at TIMESTAMPTZ,
+      created_by_admin_id UUID REFERENCES admins(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  await client.query('ALTER TABLE admins ADD COLUMN IF NOT EXISTS name VARCHAR(255)');
+  await client.query('ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ');
+  await client.query('ALTER TABLE admins ADD COLUMN IF NOT EXISTS created_by_admin_id UUID REFERENCES admins(id) ON DELETE SET NULL');
+  // Reinstalamos la constraint con nombre fijo para que, cuando en el futuro
+  // agregues un rol como "manager", el cambio principal sea actualizar
+  // src/constants/admin-roles.js y volver a sincronizar.
+  // "constraint" significa una regla que la base de datos hace cumplir.
+  // En este caso, CHECK(role IN (...)) obliga a que PostgreSQL solo acepte
+  // roles que estén en la lista permitida.
+  await client.query('ALTER TABLE admins DROP CONSTRAINT IF EXISTS admins_role_check');
+  await client.query(`
+    ALTER TABLE admins
+    ADD CONSTRAINT admins_role_check
+    CHECK (role IN (${ADMIN_ROLES_SQL_LIST}))
+  `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS refresh_sessions (
+      id UUID PRIMARY KEY,
+      -- La sesión pertenece a un admin concreto del panel.
+      admin_id UUID NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+      -- Guardamos hash, no el token real. Así protegemos mejor la sesión
+      -- incluso si alguien lograra leer la base de datos.
+      token_hash VARCHAR(255) NOT NULL,
+      user_agent TEXT,
+      ip_address VARCHAR(255),
+      -- Fecha máxima hasta la que este refresh token puede renovarse.
+      expires_at TIMESTAMPTZ NOT NULL,
+      -- revoked_at se usa para invalidar manualmente una sesión
+      -- sin borrar el registro y perder trazabilidad.
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_used_at TIMESTAMPTZ
+    )
+  `);
+
+  // Guardamos el hash del refresh token, no el token original.
+  // Así, si alguien leyera la DB, no podría reutilizar la sesión directamente.
+  await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_refresh_sessions_token_hash ON refresh_sessions(token_hash)');
+  await client.query('CREATE INDEX IF NOT EXISTS idx_refresh_sessions_admin_id ON refresh_sessions(admin_id)');
+  await client.query('CREATE INDEX IF NOT EXISTS idx_refresh_sessions_expires_at ON refresh_sessions(expires_at)');
 
   await client.query(`
     CREATE TABLE IF NOT EXISTS products (
