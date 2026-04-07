@@ -13,17 +13,31 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import db from './config/db/db.js';
+import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
 import pruebaRoutes from './routes/prueba.routes.js';
+import authRoutes from './routes/admin/auth/auth.routes.js';
+import userRoutes from './routes/admin/users/user.routes.js';
 import productRoutes from './routes/admin/products/product.routes.js';
 import productImageRoutes from './routes/admin/product-images/product-image.routes.js';
 
 const expressApp = express();
 
-expressApp.use(cors());
+expressApp.disable('x-powered-by');
+// credentials:true es importante para que el navegador acepte enviar/recibir
+// la cookie HttpOnly del refresh token desde el panel admin.
+expressApp.use(cors({
+  origin: process.env.ADMIN_APP_ORIGIN || true,
+  credentials: true,
+}));
 expressApp.use(express.json());
+// Este middleware corta espacios accidentales en strings del body/query
+// antes de que lleguen a validaciones y services.
+expressApp.use(trimRequestStrings);
 expressApp.use(morgan('dev'));
 
 expressApp.use('/api', pruebaRoutes);
+expressApp.use('/api/admin/auth', authRoutes);
+expressApp.use('/api/admin/users', userRoutes);
 expressApp.use('/api/admin', productRoutes);
 expressApp.use('/api/admin', productImageRoutes);
 
