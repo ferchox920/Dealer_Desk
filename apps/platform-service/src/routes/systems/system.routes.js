@@ -1,10 +1,16 @@
 import express from 'express';
+import { SUPER_ADMIN_ROLE } from '../../constants/platform-roles.js';
+import { authorizeRoles } from '../../middlewares/auth/authorize-roles.js';
+import { requireAuth } from '../../middlewares/auth/require-auth.js';
 import systemService from '../../services/systems/system.service.js';
 import {
   validateCreateSystem,
 } from '../../utils/validations/systems/system.validation.js';
 
 const systemRoutes = express.Router();
+
+systemRoutes.use(requireAuth);
+systemRoutes.use(authorizeRoles(SUPER_ADMIN_ROLE));
 
 function sendSystemError(res, error) {
   return res.status(error.statusCode || 500).json({

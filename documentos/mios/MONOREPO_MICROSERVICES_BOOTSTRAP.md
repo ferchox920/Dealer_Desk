@@ -118,8 +118,11 @@ Responsabilidad objetivo:
 Por ahora hace:
 
 - healthchecks
+- expone `/auth/*`
 - expone `/systems`
 - crea y lista systems en una base configurable
+- maneja `platform_admins` y refresh sessions propias
+- trae script de seed para el primer `super_admin`
 - usa `PLATFORM_DB_*` si existen, y en local puede caer a `DB_*` para no bloquear el desarrollo
 
 ## Packages compartidos

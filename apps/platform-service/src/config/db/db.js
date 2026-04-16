@@ -1,6 +1,8 @@
 import pg from 'pg';
+import { getPlatformAdminRolesSqlList } from '../../constants/platform-roles.js';
 
 const { Pool } = pg;
+const PLATFORM_ADMIN_ROLES_SQL_LIST = getPlatformAdminRolesSqlList();
 
 function getDatabaseEnv(platformName, sharedName, fallback = undefined) {
   const platformValue = process.env[platformName];
@@ -64,6 +66,34 @@ async function authenticate() {
 
 async function ensureTables(client) {
   await client.query(`
+    CREATE TABLE IF NOT EXISTS platform_admins (
+      id UUID PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      role VARCHAR(50) NOT NULL CHECK (role IN (${PLATFORM_ADMIN_ROLES_SQL_LIST})),
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      last_login_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS platform_refresh_sessions (
+      id UUID PRIMARY KEY,
+      platform_admin_id UUID NOT NULL REFERENCES platform_admins(id) ON DELETE CASCADE,
+      token_hash VARCHAR(255) NOT NULL UNIQUE,
+      user_agent TEXT,
+      ip_address VARCHAR(255),
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_used_at TIMESTAMPTZ
+    )
+  `);
+
+  await client.query(`
     CREATE TABLE IF NOT EXISTS systems (
       id UUID PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
@@ -99,6 +129,8 @@ async function ensureTables(client) {
     )
   `);
 
+  await client.query('CREATE INDEX IF NOT EXISTS idx_platform_refresh_sessions_admin_id ON platform_refresh_sessions(platform_admin_id)');
+  await client.query('CREATE INDEX IF NOT EXISTS idx_platform_refresh_sessions_expires_at ON platform_refresh_sessions(expires_at)');
   await client.query('CREATE INDEX IF NOT EXISTS idx_systems_status ON systems(status)');
   await client.query('CREATE INDEX IF NOT EXISTS idx_system_provisioning_runs_system_id ON system_provisioning_runs(system_id)');
 }

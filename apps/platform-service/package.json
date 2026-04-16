@@ -6,13 +6,16 @@
   "main": "src/main.js",
   "scripts": {
     "dev": "node --watch src/main.js",
-    "start": "node src/main.js"
+    "start": "node src/main.js",
+    "seed:super-admin": "node src/scripts/seed-super-admin.js"
   },
   "dependencies": {
     "@dealer-desk/shared-config": "1.0.0",
     "@dealer-desk/shared-http": "1.0.0",
+    "argon2": "^0.44.0",
     "cors": "^2.8.6",
     "express": "^4.22.1",
+    "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
     "pg": "^8.20.0",
     "uuid": "^13.0.0"

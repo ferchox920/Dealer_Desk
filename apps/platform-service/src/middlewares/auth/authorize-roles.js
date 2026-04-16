@@ -1,0 +1,21 @@
+function authorizeRoles(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        status: 401,
+        error: 'Authentication required.',
+      });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        status: 403,
+        error: 'You do not have permission to perform this action.',
+      });
+    }
+
+    return next();
+  };
+}
+
+export { authorizeRoles };

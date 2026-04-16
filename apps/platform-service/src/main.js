@@ -2,6 +2,7 @@ import '@dealer-desk/shared-config/load-env';
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import authRoutes from './routes/auth/auth.routes.js';
 import db from './config/db/db.js';
 import systemRoutes from './routes/systems/system.routes.js';
 import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
@@ -42,6 +43,7 @@ platformApp.get('/systems/health', (_req, res) => {
   });
 });
 
+platformApp.use('/auth', authRoutes);
 platformApp.use(systemRoutes);
 
 platformApp.use((_req, res) => {
