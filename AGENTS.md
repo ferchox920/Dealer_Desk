@@ -328,6 +328,31 @@ Atajo extra:
 - si la pregunta es sobre llamadas de la API de auth o flujo de prueba, normalmente basta con mandar a leer `documentos/mios/BIBLIA_CAMBIOS_AUTH_HOY.md`
 - si la pregunta es sobre arquitectura real del backend actual, normalmente basta con mandar a leer `documentos/mios/BIBLIA_PROYECTO.md`
 
+## Tools disponibles en esta sesion
+
+Ademas de leer el codigo y tus documentos locales, hay herramientas externas disponibles que conviene usar con criterio.
+
+### Context7
+
+Context7 esta disponible en esta sesion y sirve para consultar documentacion tecnica actualizada de librerias y frameworks.
+
+Cuando conviene usarlo:
+
+- dudas sobre APIs de librerias
+- cambios de version
+- ejemplos oficiales o cercanos a la documentacion oficial
+- confirmar uso correcto de paquetes antes de implementar
+
+Como usarlo mentalmente:
+
+1. resolver el library id correcto
+2. consultar la documentacion con ese id
+
+Regla practica:
+
+- si la duda es sobre una libreria o framework externo, preferir Context7 antes que improvisar de memoria
+- si la respuesta ya esta en el codigo del repo o en `documentos/mios/`, priorizar eso primero
+
 ## Archivos clave por area
 
 Auth y usuarios:

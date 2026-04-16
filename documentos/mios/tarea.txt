@@ -18,5 +18,13 @@ voy a tratar los listings como products. ✔
   *donde vamos a desencriptar los tokens?
 }
 
+15-04-2026 {
+  * Se va hacer la web del sistema.
+  * Investigar de que manera es mejor hacer la auth en un sistema de microservicios
+  es decir, donde conviene encriptar y desencriptar los tokens, y como va el flujo
+  en el gateway.
+  *saber si estoy usando cripto o no y si hay mas asi (legacy posiblemente)
+  
+}
 
 
