@@ -1,0 +1,14 @@
+{
+  "name": "@dealer-desk/shared-config",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./load-env": "./src/load-env.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1"
+  }
+}

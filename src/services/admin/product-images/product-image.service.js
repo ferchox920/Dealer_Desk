@@ -21,6 +21,7 @@ import Product from '../../../entities/product.entity.js';
 import cloudinary from '../../../config/cloudinary/cloudinary.js';
 import db from '../../../config/db/db.js';
 import { buildProductImagesFolder } from '../../../utils/cloudinary/cloudinary-folder.util.js';
+import { destroyCloudinaryAssetsBestEffort } from '../../../utils/cloudinary/destroy-cloudinary-assets.util.js';
 import { createHttpError } from '../../../utils/errors/app-error.util.js';
 
 class ProductImageService {
@@ -135,10 +136,15 @@ class ProductImageService {
 
     // Si una imagen pasa a ser portada, las demas del mismo producto dejan de serlo.
     if (data.is_cover === true) {
-      await ProductImage.clearCoverByProductId(productId);
+      return await db.withTransaction(async (client) => {
+        const executor = client.query.bind(client);
+
+        await ProductImage.clearCoverByProductId(productId, executor);
+        return await ProductImage.update(imageId, data, executor);
+      });
     }
 
-    return await image.update(data);
+    return await ProductImage.update(imageId, data);
   }
 
   async reorder(productId, orderedImageIds) {
@@ -202,18 +208,31 @@ class ProductImageService {
       throw createHttpError(404, 'Image does not belong to this product.', 'IMAGE_PRODUCT_MISMATCH');
     }
 
-    await cloudinary.uploader.destroy(image.cloudinary_public_id);
-    await image.destroy();
+    const deletedImage = await db.withTransaction(async (client) => {
+      const executor = client.query.bind(client);
+      const removedImage = await ProductImage.deleteById(imageId, executor);
 
-    // Si se elimina la portada y aun quedan imagenes, promovemos la primera como nueva portada.
-    if (image.is_cover) {
-      const nextCover = await ProductImage.findFirstByProductId(productId);
-      if (nextCover) {
-        await nextCover.update({ is_cover: true });
+      if (!removedImage) {
+        throw createHttpError(404, 'Image not found.', 'IMAGE_NOT_FOUND');
       }
-    }
 
-    return image;
+      // Si se elimina la portada y aun quedan imagenes, promovemos la primera como nueva portada.
+      if (removedImage.is_cover) {
+        const nextCover = await ProductImage.findFirstByProductId(productId, executor);
+        if (nextCover) {
+          await ProductImage.update(nextCover.id, { is_cover: true }, executor);
+        }
+      }
+
+      return removedImage;
+    });
+
+    await destroyCloudinaryAssetsBestEffort(
+      [deletedImage.cloudinary_public_id],
+      `product image ${imageId}`,
+    );
+
+    return deletedImage;
   }
 
 }

@@ -317,10 +317,10 @@ const Product = {
   // SQL: DELETE FROM products WHERE id = $1 RETURNING ...
   //
   // En Sequelize: product.destroy()
-  async deleteById(id) {
+  async deleteById(id, executor = query) {
     const where = buildWhereEqualsClause({ id });
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         DELETE FROM products
         WHERE ${where.clause}

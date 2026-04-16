@@ -17,6 +17,43 @@ import {
   getProductYearMax,
 } from '../../../../constants/product-ranges.js';
 
+const REQUIRED_PRODUCT_FIELDS = [
+  'year',
+  'brand',
+  'model',
+  'mileage',
+  'price',
+  'drive_train',
+  'fuel_type',
+  'vin_number',
+];
+
+function validateRequiredField(body, field, errors) {
+  if (body[field] !== undefined) {
+    return;
+  }
+
+  errors.push({
+    code: `PRODUCT_${field.toUpperCase()}_REQUIRED`,
+    field,
+    message: `The ${field} is required.`,
+  });
+}
+
+function normalizeProductBody(body, errors) {
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    return body;
+  }
+
+  errors.push({
+    code: 'PRODUCT_BODY_INVALID',
+    field: 'body',
+    message: 'The request body must be a JSON object.',
+  });
+
+  return {};
+}
+
 // Valida que un campo del body sea string (si fue enviado)
 function validateString(body, field, errors) {
   if (body[field] !== undefined && typeof body[field] !== 'string') {
@@ -41,10 +78,10 @@ function validateCurrencyCode(body, field, errors) {
   }
 }
 
-// Middleware: valida los campos del body para crear/actualizar un producto
-function validateCreateProduct(req, res, next) {
-  const errors = [];
-  const body = req.body;
+function validateProductPayload(body, errors, { requireAllFields = false } = {}) {
+  if (requireAllFields) {
+    REQUIRED_PRODUCT_FIELDS.forEach((field) => validateRequiredField(body, field, errors));
+  }
 
   pushBoundedIntegerValidation(body, 'year', errors, {
     prefix: 'PRODUCT',
@@ -68,6 +105,28 @@ function validateCreateProduct(req, res, next) {
   validateString(body, 'vin_number', errors);
   validateString(body, 'description', errors);
   validateCurrencyCode(body, 'currency_code', errors);
+}
+
+// Middleware: create exige todos los campos operativos del producto.
+function validateCreateProduct(req, res, next) {
+  const errors = [];
+  const body = normalizeProductBody(req.body, errors);
+
+  validateProductPayload(body, errors, { requireAllFields: true });
+
+  if (errors.length > 0) {
+    return res.status(400).json({ success: false, errors });
+  }
+
+  next();
+}
+
+// Middleware: update mantiene soporte para cambios parciales.
+function validateUpdateProduct(req, res, next) {
+  const errors = [];
+  const body = normalizeProductBody(req.body, errors);
+
+  validateProductPayload(body, errors);
 
   if (errors.length > 0) {
     return res.status(400).json({ success: false, errors });
@@ -83,4 +142,4 @@ const validateProductId = createUuidParamValidator({
   responseShape: 'success',
 });
 
-export { validateCreateProduct, validateProductId };
+export { validateCreateProduct, validateProductId, validateUpdateProduct };

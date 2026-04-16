@@ -1,11 +1,19 @@
 {
-  "name": "sas-dealer-api",
+  "name": "dealer-desk-monorepo",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
   "main": "src/main.js",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "node --watch src/main.js",
+    "monolith:dev": "node --watch src/main.js",
     "seed:owner": "node src/scripts/seed-owner.js",
+    "gateway:dev": "npm run dev --workspace @dealer-desk/api-gateway",
+    "identity:dev": "npm run dev --workspace @dealer-desk/identity-service",
     "front:dev": "npm --prefix front run dev",
     "front:build": "npm --prefix front run build",
     "front:preview": "npm --prefix front run preview"

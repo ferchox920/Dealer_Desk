@@ -5,6 +5,7 @@ import { authorizeRoles } from '../../../middlewares/auth/authorize-roles.js';
 import {
   validateCreateProduct,
   validateProductId,
+  validateUpdateProduct,
 } from '../../../utils/validations/admin/products/product.validation.js';
 import productService from '../../../services/admin/products/product.service.js';
 
@@ -64,7 +65,7 @@ productRoutes.get('/products/:id', validateProductId, async (req, res) => {
 productRoutes.put(
   '/products/:id',
   validateProductId,
-  validateCreateProduct,
+  validateUpdateProduct,
   async (req, res) => {
     try {
       const product = await productService.update(req.params.id, req.body);

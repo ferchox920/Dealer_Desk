@@ -1,0 +1,19 @@
+{
+  "name": "@dealer-desk/identity-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "node --watch src/main.js",
+    "start": "node src/main.js"
+  },
+  "dependencies": {
+    "@dealer-desk/shared-auth": "1.0.0",
+    "@dealer-desk/shared-config": "1.0.0",
+    "@dealer-desk/shared-http": "1.0.0",
+    "cors": "^2.8.6",
+    "express": "^4.22.1",
+    "morgan": "^1.10.1"
+  }
+}

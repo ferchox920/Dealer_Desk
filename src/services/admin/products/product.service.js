@@ -1,4 +1,3 @@
-import cloudinary from '../../../config/cloudinary/cloudinary.js';
 import {
   DEFAULT_PRODUCT_CURRENCY,
   getProductPriceRange,
@@ -6,7 +5,9 @@ import {
 } from '../../../constants/product-ranges.js';
 import Product from '../../../entities/product.entity.js';
 import ProductImage from '../../../entities/product-image.entity.js';
+import db from '../../../config/db/db.js';
 import { createHttpError } from '../../../utils/errors/app-error.util.js';
+import { destroyCloudinaryAssetsBestEffort } from '../../../utils/cloudinary/destroy-cloudinary-assets.util.js';
 
 function buildPriceOutOfRangeMessage(currencyCode, range) {
   return `The price must be between ${range.min} and ${range.max} for ${currencyCode}.`;
@@ -207,14 +208,27 @@ class ProductService {
       );
     }
 
-    const images = await ProductImage.findAll({ where: { product_id: id } });
+    const { deletedProduct, deletedImages } = await db.withTransaction(async (client) => {
+      const executor = client.query.bind(client);
+      const images = await ProductImage.findAll({ where: { product_id: id } }, executor);
+      const deletedRecord = await Product.deleteById(id, executor);
 
-    for (const img of images) {
-      await cloudinary.uploader.destroy(img.cloudinary_public_id);
-    }
+      if (!deletedRecord) {
+        throw createHttpError(404, 'Product not found.', 'PRODUCT_NOT_FOUND');
+      }
 
-    await product.destroy();
-    return product;
+      return {
+        deletedProduct: deletedRecord,
+        deletedImages: images,
+      };
+    });
+
+    await destroyCloudinaryAssetsBestEffort(
+      deletedImages.map((image) => image.cloudinary_public_id),
+      `product ${id} image`,
+    );
+
+    return deletedProduct;
   }
 }
 
