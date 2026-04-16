@@ -15,6 +15,7 @@
     "gateway:dev": "npm run dev --workspace @dealer-desk/api-gateway",
     "identity:dev": "npm run dev --workspace @dealer-desk/identity-service",
     "catalog:dev": "npm run dev --workspace @dealer-desk/catalog-service",
+    "platform:dev": "npm run dev --workspace @dealer-desk/platform-service",
     "front:dev": "npm --prefix front run dev",
     "front:build": "npm --prefix front run build",
     "front:preview": "npm --prefix front run preview"

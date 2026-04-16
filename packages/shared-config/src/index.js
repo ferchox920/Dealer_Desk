@@ -43,6 +43,14 @@ function getCatalogServiceUrl() {
   return getStringEnv('CATALOG_SERVICE_URL', `http://localhost:${getCatalogServicePort()}`);
 }
 
+function getPlatformServicePort() {
+  return getNumberEnv('PLATFORM_SERVICE_PORT', 3301);
+}
+
+function getPlatformServiceUrl() {
+  return getStringEnv('PLATFORM_SERVICE_URL', `http://localhost:${getPlatformServicePort()}`);
+}
+
 export {
   getAllowedOrigin,
   getCatalogServicePort,
@@ -50,4 +58,6 @@ export {
   getGatewayPort,
   getIdentityServicePort,
   getIdentityServiceUrl,
+  getPlatformServicePort,
+  getPlatformServiceUrl,
 };

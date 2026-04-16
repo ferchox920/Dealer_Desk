@@ -19,6 +19,7 @@ apps/
   api-gateway/
   catalog-service/
   identity-service/
+  platform-service/
 packages/
   shared-auth/
   shared-config/
@@ -104,6 +105,23 @@ Por ahora hace:
 - acepta auth reenviada por el gateway para proteger inventario sin volver a acoplar login
 - exige secreto interno del gateway para no confiar en headers de auth enviados por clientes externos
 
+### `apps/platform-service`
+
+Responsabilidad objetivo:
+
+- capa central SaaS
+- systems o dealers
+- estado del sistema
+- metadata de dominios y URLs
+- runs de provisioning
+
+Por ahora hace:
+
+- healthchecks
+- expone `/systems`
+- crea y lista systems en una base configurable
+- usa `PLATFORM_DB_*` si existen, y en local puede caer a `DB_*` para no bloquear el desarrollo
+
 ## Packages compartidos
 
 ### `packages/shared-auth`
@@ -137,6 +155,7 @@ Desde la raiz:
 - `npm run gateway:dev`
 - `npm run identity:dev`
 - `npm run catalog:dev`
+- `npm run platform:dev`
 
 Si solo quieres validar frontera HTTP sin una DB local lista:
 
@@ -157,7 +176,8 @@ No sirve para validar login real ni lectura/escritura contra PostgreSQL.
 3. mover middlewares y utils compartidos que realmente valgan la pena a `packages/`
 4. cuando identity quede claro, abrir `catalog-service`
 5. estabilizar auth interna entre gateway y catalogo
-6. recien despues decidir si conviene separar repos
+6. abrir `platform-service` para la capa central SaaS
+7. recien despues decidir si conviene separar repos
 
 ## Decision de arquitectura de esta etapa
 
@@ -166,3 +186,4 @@ La separacion elegida hoy es:
 - `gateway` como borde
 - `identity-service` como bounded context de identidad
 - `catalog-service` como bounded context de inventario interno
+- `platform-service` como bounded context central de plataforma SaaS
