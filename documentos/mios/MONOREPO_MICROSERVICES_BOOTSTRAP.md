@@ -9,6 +9,7 @@ La intencion es:
 - mantener el monolito operativo actual en la raiz
 - abrir una zona nueva para evolucion a microservicios
 - empezar por `api-gateway` e `identity-service`
+- abrir despues `catalog-service` para productos e imagenes
 - mover codigo por etapas, no de golpe
 
 ## Estructura creada
@@ -16,6 +17,7 @@ La intencion es:
 ```txt
 apps/
   api-gateway/
+  catalog-service/
   identity-service/
 packages/
   shared-auth/
@@ -56,6 +58,7 @@ Por ahora hace solo:
 
 - healthcheck
 - proxy hacia `identity-service`
+- proxy hacia `catalog-service`
 - forwarding basico de contexto auth por headers internos
 
 ### `apps/identity-service`
@@ -81,6 +84,22 @@ Importante en esta fase:
 - el monolito de raiz sigue existiendo, pero identity ya tiene su propia base tecnica
 - primero aislamos proceso y routing
 - despues extraemos internals propios del bounded context
+
+### `apps/catalog-service`
+
+Responsabilidad objetivo:
+
+- productos
+- imagenes de productos
+- reglas de publicacion y venta del catalogo
+- integracion con Cloudinary para la galeria
+
+Por ahora hace:
+
+- healthchecks
+- expone `/products/*` y `/products/:id/images/*` desde un proceso separado
+- usa DB, entities, services y validaciones locales dentro de `apps/catalog-service/src`
+- acepta auth reenviada por el gateway para proteger inventario sin volver a acoplar login
 
 ## Packages compartidos
 
@@ -114,6 +133,7 @@ Desde la raiz:
 - `npm run monolith:dev`
 - `npm run gateway:dev`
 - `npm run identity:dev`
+- `npm run catalog:dev`
 
 Si solo quieres validar frontera HTTP sin una DB local lista:
 
@@ -133,7 +153,8 @@ No sirve para validar login real ni lectura/escritura contra PostgreSQL.
 2. mover primero superficie HTTP de auth/users a `identity-service`
 3. mover middlewares y utils compartidos que realmente valgan la pena a `packages/`
 4. cuando identity quede claro, abrir `catalog-service`
-5. recien despues decidir si conviene separar repos
+5. estabilizar auth interna entre gateway y catalogo
+6. recien despues decidir si conviene separar repos
 
 ## Decision de arquitectura de esta etapa
 
@@ -141,5 +162,4 @@ La separacion elegida hoy es:
 
 - `gateway` como borde
 - `identity-service` como bounded context de identidad
-
-Todavia no se abre `catalog-service` para no partir demasiadas cosas a la vez.
+- `catalog-service` como bounded context de inventario interno

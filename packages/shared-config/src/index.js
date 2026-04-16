@@ -35,8 +35,18 @@ function getIdentityServiceUrl() {
   return getStringEnv('IDENTITY_SERVICE_URL', `http://localhost:${getIdentityServicePort()}`);
 }
 
+function getCatalogServicePort() {
+  return getNumberEnv('CATALOG_SERVICE_PORT', 3201);
+}
+
+function getCatalogServiceUrl() {
+  return getStringEnv('CATALOG_SERVICE_URL', `http://localhost:${getCatalogServicePort()}`);
+}
+
 export {
   getAllowedOrigin,
+  getCatalogServicePort,
+  getCatalogServiceUrl,
   getGatewayPort,
   getIdentityServicePort,
   getIdentityServiceUrl,

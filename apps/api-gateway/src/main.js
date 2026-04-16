@@ -11,6 +11,7 @@ import {
 } from '@dealer-desk/shared-auth';
 import {
   getAllowedOrigin,
+  getCatalogServiceUrl,
   getGatewayPort,
   getIdentityServiceUrl,
 } from '@dealer-desk/shared-config';
@@ -22,6 +23,7 @@ import {
 const gatewayApp = express();
 const PORT = getGatewayPort();
 const identityServiceUrl = getIdentityServiceUrl();
+const catalogServiceUrl = getCatalogServiceUrl();
 const IDENTITY_PUBLIC_AUTH_PATHS = new Set([
   '/api/admin/auth/health',
   '/api/admin/auth/login',
@@ -31,6 +33,9 @@ const IDENTITY_PUBLIC_AUTH_PATHS = new Set([
   '/api/admin/auth/refresh',
   '/api/admin/auth/logout',
   '/api/admin/users/health',
+]);
+const CATALOG_PUBLIC_PATHS = new Set([
+  '/api/admin/products/health',
 ]);
 
 function isProtectedIdentityRoute(pathname) {
@@ -49,6 +54,14 @@ function isProtectedIdentityRoute(pathname) {
   return !IDENTITY_PUBLIC_AUTH_PATHS.has(pathname);
 }
 
+function isProtectedCatalogRoute(pathname) {
+  if (CATALOG_PUBLIC_PATHS.has(pathname)) {
+    return false;
+  }
+
+  return pathname.startsWith('/api/admin/products');
+}
+
 gatewayApp.disable('x-powered-by');
 gatewayApp.use(cors({
   origin: getAllowedOrigin(),
@@ -60,6 +73,7 @@ gatewayApp.get('/health', (_req, res) => {
   return sendHealthResponse(res, {
     service: 'api-gateway',
     upstreams: {
+      catalog: catalogServiceUrl,
       identity: identityServiceUrl,
     },
   });
@@ -68,7 +82,8 @@ gatewayApp.get('/health', (_req, res) => {
 gatewayApp.use((req, res, next) => {
   const accessToken = getBearerTokenFromAuthorizationHeader(req.headers.authorization);
   const pathname = req.originalUrl.split('?')[0];
-  const routeRequiresAuth = isProtectedIdentityRoute(pathname);
+  const routeRequiresAuth = isProtectedIdentityRoute(pathname)
+    || isProtectedCatalogRoute(pathname);
   let accessTokenPayload = null;
 
   if (accessToken) {
@@ -121,6 +136,13 @@ gatewayApp.use(createProxyMiddleware({
   target: identityServiceUrl,
   changeOrigin: true,
   pathRewrite: (path) => path.replace(/^\/api\/admin\/users/, '/users'),
+}));
+
+gatewayApp.use(createProxyMiddleware({
+  pathFilter: (pathname) => pathname.startsWith('/api/admin/products'),
+  target: catalogServiceUrl,
+  changeOrigin: true,
+  pathRewrite: (path) => path.replace(/^\/api\/admin/, ''),
 }));
 
 gatewayApp.use((_req, res) => {
