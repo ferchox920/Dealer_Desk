@@ -1,0 +1,21 @@
+.card {
+  background: linear-gradient(180deg, var(--color-surface-1) 0%, rgba(7, 18, 32, 0.95) 100%);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-elevation-1);
+  overflow: hidden;
+  padding: var(--space-6);
+  position: relative;
+}
+
+.card::before {
+  background: linear-gradient(120deg, rgba(91, 144, 255, 0.14), transparent 55%);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.card > * {
+  position: relative;
+}

@@ -1,0 +1,108 @@
+.page {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.contentGrid {
+  align-items: start;
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1.45fr) minmax(20rem, 0.95fr);
+  padding-bottom: var(--space-8);
+}
+
+.primaryStack,
+.sidebar {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.sectionHeading {
+  align-items: start;
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+
+.imagesForm {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.statusActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.statusCopy {
+  color: var(--color-text-secondary);
+  display: grid;
+  gap: var(--space-3);
+  line-height: 1.65;
+}
+
+.statusMeta {
+  align-items: end;
+  display: grid;
+  gap: var(--space-1);
+  justify-items: end;
+}
+
+.statusValue {
+  color: var(--color-text-primary);
+  font-family: var(--font-family-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.statusHint {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.badgeStack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.readingBadge,
+.readingBadgeMuted {
+  border-radius: var(--radius-pill);
+  font-size: 0.9rem;
+  font-weight: 700;
+  min-height: 2.2rem;
+  padding: 0.55rem 0.9rem;
+}
+
+.readingBadge {
+  background: rgba(61, 122, 255, 0.14);
+  border: 1px solid rgba(138, 176, 255, 0.28);
+  color: var(--color-text-primary);
+}
+
+.readingBadgeMuted {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(138, 176, 255, 0.12);
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 980px) {
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .sectionHeading {
+    flex-direction: column;
+  }
+}

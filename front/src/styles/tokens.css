@@ -1,0 +1,56 @@
+:root {
+  color-scheme: dark;
+  --font-family-sans: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
+  --font-family-display: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+
+  --color-bg-canvas: #030b16;
+  --color-bg-elevated: #081321;
+  --color-bg-panel: #0d1d33;
+  --color-bg-panel-strong: #132844;
+  --color-surface-1: rgba(10, 23, 40, 0.88);
+  --color-surface-2: rgba(18, 40, 68, 0.96);
+  --color-surface-3: rgba(9, 20, 36, 0.92);
+  --color-border-soft: rgba(138, 176, 255, 0.16);
+  --color-border-strong: rgba(138, 176, 255, 0.3);
+  --color-text-primary: #eef4ff;
+  --color-text-secondary: #a8bedf;
+  --color-text-muted: #7d93b4;
+  --color-accent-primary: #3d7aff;
+  --color-accent-primary-hover: #5b90ff;
+  --color-accent-soft: rgba(61, 122, 255, 0.16);
+  --color-accent-focus: rgba(97, 147, 255, 0.38);
+  --color-warning-surface: rgba(173, 128, 20, 0.18);
+  --color-warning-border: rgba(236, 194, 82, 0.28);
+  --color-warning-text: #ffe6aa;
+  --color-success-surface: rgba(28, 115, 87, 0.18);
+  --color-success-border: rgba(89, 211, 164, 0.32);
+  --color-success-text: #a6efd4;
+  --color-error-surface: rgba(144, 48, 80, 0.2);
+  --color-error-border: rgba(255, 134, 167, 0.34);
+  --color-error-text: #ffd7e1;
+
+  --shadow-elevation-1: 0 18px 42px rgba(2, 8, 18, 0.36);
+  --shadow-elevation-2: 0 24px 60px rgba(2, 8, 18, 0.48);
+  --shadow-focus: 0 0 0 4px var(--color-accent-focus);
+
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.4rem;
+  --radius-xl: 1.8rem;
+  --radius-pill: 999px;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 2rem;
+  --space-8: 2.5rem;
+  --space-9: 3rem;
+
+  --transition-base: 180ms ease;
+  --container-lg: 1180px;
+  --container-xl: 1420px;
+  --viewport-height-dynamic: 100dvh;
+}

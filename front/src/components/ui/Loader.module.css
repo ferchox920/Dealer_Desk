@@ -1,0 +1,31 @@
+.loader {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  gap: var(--space-3);
+}
+
+.loader--fullscreen {
+  display: grid;
+  min-height: 100dvh;
+  place-content: center;
+}
+
+.spinner {
+  animation: spin 780ms linear infinite;
+  border: 3px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-pill);
+  border-top-color: var(--color-accent-primary-hover);
+  height: 1.2rem;
+  width: 1.2rem;
+}
+
+.label {
+  font-weight: 600;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

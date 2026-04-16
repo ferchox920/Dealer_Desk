@@ -1,0 +1,26 @@
+.header {
+  display: flex;
+  gap: var(--space-6);
+  justify-content: space-between;
+  padding-block: var(--space-2) var(--space-3);
+}
+
+.copy {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+@media (max-width: 920px) {
+  .header,
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

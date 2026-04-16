@@ -1,0 +1,82 @@
+.field {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.labelRow {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+
+.label {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.helper {
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+}
+
+.dropzone {
+  background:
+    radial-gradient(circle at top, rgba(61, 122, 255, 0.12), transparent 52%),
+    rgba(5, 16, 30, 0.9);
+  border: 1px dashed rgba(138, 176, 255, 0.22);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  min-height: 11.5rem;
+  padding: var(--space-5);
+  transition:
+    border-color var(--transition-base),
+    background var(--transition-base),
+    transform var(--transition-base);
+}
+
+.dropzone:hover {
+  border-color: rgba(138, 176, 255, 0.34);
+  transform: translateY(-1px);
+}
+
+.dropzone--active {
+  border-color: rgba(138, 176, 255, 0.42);
+}
+
+.dropzone--accept {
+  background:
+    radial-gradient(circle at top, rgba(48, 214, 167, 0.16), transparent 52%),
+    rgba(5, 16, 30, 0.96);
+  border-color: rgba(48, 214, 167, 0.44);
+}
+
+.dropzone--reject {
+  background:
+    radial-gradient(circle at top, rgba(255, 134, 167, 0.16), transparent 52%),
+    rgba(5, 16, 30, 0.96);
+  border-color: rgba(255, 134, 167, 0.4);
+}
+
+.dropzone--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.copy {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.copy strong {
+  color: var(--color-text-primary);
+  font-size: 1rem;
+}
+
+.copy p {
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}

@@ -1,0 +1,39 @@
+.header {
+  margin-bottom: var(--space-5);
+}
+
+.emptyState {
+  border: 1px dashed var(--color-border-soft);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  padding: var(--space-4);
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.row {
+  border-bottom: 1px solid rgba(138, 176, 255, 0.08);
+  display: grid;
+  gap: var(--space-1);
+  padding-bottom: var(--space-3);
+}
+
+.row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.label {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.value {
+  word-break: break-word;
+}

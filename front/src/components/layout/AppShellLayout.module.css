@@ -1,0 +1,29 @@
+.shell {
+  min-height: 100dvh;
+  padding: var(--space-5);
+}
+
+.frame {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: minmax(17.5rem, 18.75rem) minmax(0, 1fr);
+  margin: 0 auto;
+  max-width: var(--container-xl);
+}
+
+.content {
+  min-width: 0;
+  padding-block: var(--space-3) var(--space-8);
+}
+
+@media (max-width: 980px) {
+  .frame {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    padding: var(--space-4);
+  }
+}

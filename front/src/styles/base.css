@@ -1,0 +1,96 @@
+body {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(61, 122, 255, 0.14), transparent 28%),
+    radial-gradient(circle at 90% 0%, rgba(79, 128, 255, 0.18), transparent 22%),
+    linear-gradient(180deg, #07111f 0%, var(--color-bg-canvas) 62%, #020710 100%);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-sans);
+  line-height: 1.5;
+  min-width: 320px;
+}
+
+#root {
+  min-height: var(--viewport-height-dynamic);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+.app-shell {
+  margin: 0 auto;
+  max-width: var(--container-lg);
+  padding-inline: var(--space-5);
+}
+
+.page-eyebrow {
+  color: #8db5ff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.page-title {
+  font-family: var(--font-family-display);
+  font-size: clamp(2.2rem, 4vw, 3.25rem);
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+
+.page-subtitle {
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  max-width: 44rem;
+}
+
+.section-title {
+  font-family: var(--font-family-display);
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.muted-text {
+  color: var(--color-text-muted);
+}
+
+.sr-only {
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding-inline: var(--space-4);
+  }
+}
