@@ -7,6 +7,9 @@ const AUTH_CONTEXT_HEADER_MAP = {
   adminRole: 'x-admin-role',
   isAuthenticated: 'x-authenticated',
 };
+const INTERNAL_HEADER_MAP = {
+  serviceSecret: 'x-internal-service-secret',
+};
 
 function getRequiredEnv(name, { minLength = 1 } = {}) {
   const value = process.env[name];
@@ -19,6 +22,7 @@ function getRequiredEnv(name, { minLength = 1 } = {}) {
 }
 
 const JWT_ACCESS_SECRET = getRequiredEnv('JWT_ACCESS_SECRET', { minLength: 32 });
+const INTERNAL_SERVICE_SECRET = getRequiredEnv('INTERNAL_SERVICE_SECRET', { minLength: 24 });
 const JWT_ISSUER = process.env.JWT_ISSUER?.trim() || 'dealer-desk-admin';
 const JWT_AUDIENCE = process.env.JWT_AUDIENCE?.trim() || 'dealer-desk-admin-api';
 
@@ -53,9 +57,22 @@ function buildForwardedAuthContext({ accessToken = null, accessTokenPayload = nu
   };
 }
 
+function buildInternalServiceHeaders() {
+  return {
+    [INTERNAL_HEADER_MAP.serviceSecret]: INTERNAL_SERVICE_SECRET,
+  };
+}
+
+function hasValidInternalServiceSecret(headers = {}) {
+  return headers[INTERNAL_HEADER_MAP.serviceSecret] === INTERNAL_SERVICE_SECRET;
+}
+
 export {
   AUTH_CONTEXT_HEADER_MAP,
+  INTERNAL_HEADER_MAP,
   buildForwardedAuthContext,
+  buildInternalServiceHeaders,
   getBearerTokenFromAuthorizationHeader,
+  hasValidInternalServiceSecret,
   verifyAccessToken,
 };

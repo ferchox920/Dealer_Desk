@@ -6,6 +6,7 @@ import db from './config/db/db.js';
 import productRoutes from './routes/products/product.routes.js';
 import productImageRoutes from './routes/product-images/product-image.routes.js';
 import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
+import { requireInternalRequest } from './middlewares/http/require-internal-request.js';
 import {
   getAllowedOrigin,
   getCatalogServicePort,
@@ -32,6 +33,14 @@ catalogApp.get('/health', (_req, res) => {
     service: 'catalog-service',
     boundedContext: 'catalog',
   });
+});
+
+catalogApp.use((req, res, next) => {
+  if (req.path === '/health') {
+    return next();
+  }
+
+  return requireInternalRequest(req, res, next);
 });
 
 catalogApp.get('/products/health', (_req, res) => {

@@ -60,6 +60,7 @@ Por ahora hace solo:
 - proxy hacia `identity-service`
 - proxy hacia `catalog-service`
 - forwarding basico de contexto auth por headers internos
+- agrega un secreto interno compartido para que los servicios acepten trafico solo desde gateway
 
 ### `apps/identity-service`
 
@@ -75,6 +76,7 @@ Por ahora hace solo:
 - healthchecks
 - expone `/auth/*` y `/users/*` desde un proceso separado
 - reutiliza temporalmente rutas, middlewares y services del backend actual
+- exige secreto interno del gateway para cualquier ruta de aplicacion distinta de `/health`
 
 Importante en esta fase:
 
@@ -100,6 +102,7 @@ Por ahora hace:
 - expone `/products/*` y `/products/:id/images/*` desde un proceso separado
 - usa DB, entities, services y validaciones locales dentro de `apps/catalog-service/src`
 - acepta auth reenviada por el gateway para proteger inventario sin volver a acoplar login
+- exige secreto interno del gateway para no confiar en headers de auth enviados por clientes externos
 
 ## Packages compartidos
 

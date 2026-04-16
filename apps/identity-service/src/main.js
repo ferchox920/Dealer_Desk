@@ -6,6 +6,7 @@ import authRoutes from './routes/auth/auth.routes.js';
 import userRoutes from './routes/users/user.routes.js';
 import db from './config/db/db.js';
 import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
+import { requireInternalRequest } from './middlewares/http/require-internal-request.js';
 import {
   AUTH_CONTEXT_HEADER_MAP,
   getBearerTokenFromAuthorizationHeader,
@@ -37,6 +38,14 @@ identityApp.get('/health', (_req, res) => {
     service: 'identity-service',
     boundedContext: 'identity',
   });
+});
+
+identityApp.use((req, res, next) => {
+  if (req.path === '/health') {
+    return next();
+  }
+
+  return requireInternalRequest(req, res, next);
 });
 
 identityApp.get('/auth/health', (req, res) => {

@@ -6,6 +6,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import {
   AUTH_CONTEXT_HEADER_MAP,
   buildForwardedAuthContext,
+  buildInternalServiceHeaders,
   getBearerTokenFromAuthorizationHeader,
   verifyAccessToken,
 } from '@dealer-desk/shared-auth';
@@ -112,6 +113,7 @@ gatewayApp.use((req, res, next) => {
     accessToken,
     accessTokenPayload,
   });
+  const internalHeaders = buildInternalServiceHeaders();
 
   Object.entries(AUTH_CONTEXT_HEADER_MAP).forEach(([fieldName, headerName]) => {
     if (!authContext[fieldName]) {
@@ -119,6 +121,10 @@ gatewayApp.use((req, res, next) => {
     }
 
     req.headers[headerName] = authContext[fieldName];
+  });
+
+  Object.entries(internalHeaders).forEach(([headerName, headerValue]) => {
+    req.headers[headerName] = headerValue;
   });
 
   next();
