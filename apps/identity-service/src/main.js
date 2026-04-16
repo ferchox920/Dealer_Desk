@@ -49,6 +49,9 @@ identityApp.get('/auth/health', (req, res) => {
       ),
       forwarded_headers: {
         authenticated: req.headers[AUTH_CONTEXT_HEADER_MAP.isAuthenticated] || null,
+        admin_email: req.headers[AUTH_CONTEXT_HEADER_MAP.adminEmail] || null,
+        admin_id: req.headers[AUTH_CONTEXT_HEADER_MAP.adminId] || null,
+        admin_role: req.headers[AUTH_CONTEXT_HEADER_MAP.adminRole] || null,
         request_access_token: req.headers[AUTH_CONTEXT_HEADER_MAP.accessToken] || null,
       },
     },
