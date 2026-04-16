@@ -1,10 +1,15 @@
 // ============================================================================
 // user.validation.js
 //
-// Validaciones de usuarios del panel (tabla admins).
+// Validaciones HTTP para users del panel.
+// Regla nueva importante:
+//  - create acepta password opcional
+//  - si no viene password, el backend debe crear el usuario pendiente e
+//    iniciar el flujo de invitacion por correo
 // ============================================================================
 
 import { ADMIN_ROLES, isAdminRole } from '../../../../constants/admin-roles.js';
+import { getPasswordPolicyError } from '../../../security/password.util.js';
 import { createUuidParamValidator } from '../../shared/common.validation.js';
 
 function validateOptionalString(body, field, errors) {
@@ -57,18 +62,36 @@ function validateOptionalNonEmptyString(body, field, errors) {
   }
 }
 
-function validatePassword(body, field, errors, { required = false } = {}) {
+function validatePassword(body, field, errors) {
   const value = body[field];
 
-  if (value === undefined && !required) {
+  if (value === undefined) {
     return;
   }
 
-  if (typeof value !== 'string' || value.trim().length < 8) {
+  if (typeof value !== 'string') {
     errors.push({
       code: 'USER_PASSWORD_INVALID',
       field,
-      message: 'The password must contain at least 8 characters.',
+      message: 'The password must be a string.',
+    });
+    return;
+  }
+
+  const trimmedValue = value.trim();
+
+  // Password vacia en create significa "usar invitacion".
+  if (trimmedValue.length === 0) {
+    return;
+  }
+
+  const passwordPolicyError = getPasswordPolicyError(trimmedValue);
+
+  if (passwordPolicyError) {
+    errors.push({
+      code: 'USER_PASSWORD_INVALID',
+      field,
+      message: passwordPolicyError,
     });
   }
 }
@@ -79,7 +102,7 @@ function validateCreateUser(req, res, next) {
 
   validateOptionalString(body, 'name', errors);
   validateRequiredString(body, 'email', errors);
-  validatePassword(body, 'password', errors, { required: true });
+  validatePassword(body, 'password', errors);
   validateOptionalRole(body, 'role', errors);
   validateOptionalBoolean(body, 'is_active', errors);
 

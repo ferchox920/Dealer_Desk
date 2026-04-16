@@ -7,6 +7,8 @@
 // ============================================================================
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const POSTGRES_INTEGER_MIN = -2147483648;
+const POSTGRES_INTEGER_MAX = 2147483647;
 
 function isValidUuid(value) {
   return typeof value === 'string' && UUID_REGEX.test(value);
@@ -18,6 +20,51 @@ function buildUuidValidationError(field, code) {
     field,
     message: `The ${field} must be a valid UUID.`,
   };
+}
+
+function isFiniteSafeInteger(value) {
+  return typeof value === 'number'
+    && Number.isFinite(value)
+    && Number.isInteger(value)
+    && Number.isSafeInteger(value);
+}
+
+function pushBoundedIntegerValidation(body, field, errors, {
+  prefix,
+  min = POSTGRES_INTEGER_MIN,
+  max = POSTGRES_INTEGER_MAX,
+}) {
+  if (body[field] === undefined) {
+    return;
+  }
+
+  const value = body[field];
+
+  if (typeof value !== 'number') {
+    errors.push({
+      code: `${prefix}_${field.toUpperCase()}_NOT_NUMBER`,
+      field,
+      message: `The ${field} must be a number.`,
+    });
+    return;
+  }
+
+  if (!isFiniteSafeInteger(value)) {
+    errors.push({
+      code: `${prefix}_${field.toUpperCase()}_INVALID_INTEGER`,
+      field,
+      message: `The ${field} must be a finite safe integer.`,
+    });
+    return;
+  }
+
+  if (value < min || value > max) {
+    errors.push({
+      code: `${prefix}_${field.toUpperCase()}_OUT_OF_RANGE`,
+      field,
+      message: `The ${field} must be between ${min} and ${max}.`,
+    });
+  }
 }
 
 // Factory para crear middlewares reusables:
@@ -53,8 +100,12 @@ function createUuidParamValidator({
 }
 
 export {
+  POSTGRES_INTEGER_MAX,
+  POSTGRES_INTEGER_MIN,
   UUID_REGEX,
   buildUuidValidationError,
   createUuidParamValidator,
+  isFiniteSafeInteger,
   isValidUuid,
+  pushBoundedIntegerValidation,
 };

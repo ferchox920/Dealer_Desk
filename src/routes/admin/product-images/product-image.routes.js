@@ -15,12 +15,25 @@
 // ============================================================================
 
 import express from 'express';
+import { OWNER_ROLE, STAFF_ROLE } from '../../../constants/admin-roles.js';
 import upload from '../../../config/multer/multer.js';
-import { validateImageFiles, validateUpdateImage, validateImageId } from '../../../utils/validations/admin/product-images/product-image.validation.js';
+import { requireAuth } from '../../../middlewares/auth/require-auth.js';
+import { authorizeRoles } from '../../../middlewares/auth/authorize-roles.js';
+import {
+  validateImageFiles,
+  validateUpdateImage,
+  validateReorderImages,
+  validateImageId,
+} from '../../../utils/validations/admin/product-images/product-image.validation.js';
 import { validateProductId } from '../../../utils/validations/admin/products/product.validation.js';
 import productImageService from '../../../services/admin/product-images/product-image.service.js';
 
 const productImageRoutes = express.Router();
+
+// La galeria del producto tambien es administracion interna del panel.
+// Reutilizamos la misma barrera: sesion valida primero y rol permitido despues.
+productImageRoutes.use(requireAuth);
+productImageRoutes.use(authorizeRoles(OWNER_ROLE, STAFF_ROLE));
 
 // Extrae el contexto del sistema/dealer desde los headers que envía el gateway.
 // Hoy el gateway aún no envía estos headers, así que todos llegan undefined
@@ -35,13 +48,21 @@ function getSystemContext(req) {
   };
 }
 
+function sendImageError(res, error) {
+  return res.status(error.statusCode || 500).json({
+    status: error.statusCode || 500,
+    error: error.message,
+    code: error.code,
+  });
+}
+
 // Create - Sube 1-30 imágenes a Cloudinary y las asocia al producto en la DB
 productImageRoutes.post('/products/:id/images', validateProductId, upload.array('images', 30), validateImageFiles, async (req, res) => {
   try {
     const images = await productImageService.create(req.params.id, req.files, getSystemContext(req));
     res.status(201).json({ status: 201, data: images });
   } catch (error) {
-    res.status(404).json({ status: 404, error: error.message });
+    return sendImageError(res, error);
   }
 });
 
@@ -51,7 +72,16 @@ productImageRoutes.get('/products/:id/images', validateProductId, async (req, re
     const images = await productImageService.getByProductId(req.params.id);
     res.status(200).json({ status: 200, data: images });
   } catch (error) {
-    res.status(404).json({ status: 404, error: error.message });
+    return sendImageError(res, error);
+  }
+});
+
+productImageRoutes.put('/products/:id/images/reorder', validateProductId, validateReorderImages, async (req, res) => {
+  try {
+    const images = await productImageService.reorder(req.params.id, req.body.orderedImageIds);
+    return res.status(200).json({ status: 200, data: images });
+  } catch (error) {
+    return sendImageError(res, error);
   }
 });
 
@@ -61,7 +91,7 @@ productImageRoutes.get('/products/:id/images/:imageId', validateProductId, valid
     const image = await productImageService.getById(req.params.id, req.params.imageId);
     res.status(200).json({ status: 200, data: image });
   } catch (error) {
-    res.status(404).json({ status: 404, error: error.message });
+    return sendImageError(res, error);
   }
 });
 
@@ -71,7 +101,7 @@ productImageRoutes.put('/products/:id/images/:imageId', validateProductId, valid
     const image = await productImageService.update(req.params.id, req.params.imageId, req.body);
     res.status(200).json({ status: 200, data: image });
   } catch (error) {
-    res.status(404).json({ status: 404, error: error.message });
+    return sendImageError(res, error);
   }
 });
 
@@ -81,7 +111,7 @@ productImageRoutes.delete('/products/:id/images/:imageId', validateProductId, va
     const image = await productImageService.delete(req.params.id, req.params.imageId);
     res.status(200).json({ status: 200, data: image });
   } catch (error) {
-    res.status(404).json({ status: 404, error: error.message });
+    return sendImageError(res, error);
   }
 });
 

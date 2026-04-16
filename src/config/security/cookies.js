@@ -10,10 +10,13 @@ const REFRESH_TOKEN_COOKIE_NAME = 'dealer_desk_refresh_token';
 
 function getRefreshCookieBaseOptions() {
   const isProduction = process.env.NODE_ENV === 'production';
+  const forceSecureCookie = process.env.COOKIE_SECURE === 'true';
 
   return {
     httpOnly: true,
-    secure: isProduction && process.env.COOKIE_SECURE === 'true',
+    // En produccion la cookie SIEMPRE debe ir solo por HTTPS.
+    // En desarrollo dejamos una bandera opcional por si quieres probar localmente con secure.
+    secure: isProduction || forceSecureCookie,
     sameSite: 'lax',
     path: '/api/admin/auth',
   };

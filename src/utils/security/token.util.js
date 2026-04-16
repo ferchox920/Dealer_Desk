@@ -8,10 +8,20 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'dealer-desk-dev-access-secret';
-const JWT_ISSUER = process.env.JWT_ISSUER || 'dealer-desk-admin';
-const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'dealer-desk-admin-api';
-const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL || '15m';
+function getRequiredEnv(name, { minLength = 1 } = {}) {
+  const value = process.env[name];
+
+  if (typeof value !== 'string' || value.trim().length < minLength) {
+    throw new Error(`${name} must be set in the environment with at least ${minLength} characters.`);
+  }
+
+  return value.trim();
+}
+
+const JWT_ACCESS_SECRET = getRequiredEnv('JWT_ACCESS_SECRET', { minLength: 32 });
+const JWT_ISSUER = process.env.JWT_ISSUER?.trim() || 'dealer-desk-admin';
+const JWT_AUDIENCE = process.env.JWT_AUDIENCE?.trim() || 'dealer-desk-admin-api';
+const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL?.trim() || '15m';
 
 // El access token es una "credencial portátil" corta.
 // Lo firmamos con una secret para que el backend pueda comprobar
@@ -45,8 +55,18 @@ function verifyAccessToken(token) {
 
 // El refresh token es opaco: no es JWT, no lleva información legible adentro.
 // Solo sirve como "llave de renovación" para pedir otro access token.
+function generateOpaqueToken(byteLength = 48) {
+  return crypto.randomBytes(byteLength).toString('hex');
+}
+
 function generateOpaqueRefreshToken() {
-  return crypto.randomBytes(48).toString('hex');
+  return generateOpaqueToken(48);
+}
+
+// Reutilizamos el mismo patrón para enlaces sensibles por correo:
+// token aleatorio largo + hash en DB + expiración.
+function generateOpaqueActionToken() {
+  return generateOpaqueToken(48);
 }
 
 // Nunca guardamos tokens sensibles "en claro" en la DB si podemos evitarlo.
@@ -55,4 +75,11 @@ function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-export { generateOpaqueRefreshToken, sha256, signAccessToken, verifyAccessToken };
+export {
+  generateOpaqueActionToken,
+  generateOpaqueRefreshToken,
+  generateOpaqueToken,
+  sha256,
+  signAccessToken,
+  verifyAccessToken,
+};

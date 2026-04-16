@@ -1,92 +1,140 @@
-// ============================================================================
-// product.routes.js
-//
-// Endpoints HTTP para productos (CRUD completo).
-// Todas las rutas están bajo /products.
-//
-// Cada ruta valida entrada y delega al service.
-// ============================================================================
-
-import express from "express";
+import express from 'express';
+import { OWNER_ROLE, STAFF_ROLE } from '../../../constants/admin-roles.js';
+import { requireAuth } from '../../../middlewares/auth/require-auth.js';
+import { authorizeRoles } from '../../../middlewares/auth/authorize-roles.js';
 import {
   validateCreateProduct,
   validateProductId,
-} from "../../../utils/validations/admin/products/product.validation.js";
-import productService from "../../../services/admin/products/product.service.js";
+} from '../../../utils/validations/admin/products/product.validation.js';
+import productService from '../../../services/admin/products/product.service.js';
 
 const productRoutes = express.Router();
 
-// Create product
-productRoutes.post(
-  "/products",
-  validateCreateProduct,
-  async (req, res) => {
-    try {
-      const product = await productService.create(req.body);
+// Estas rutas viven bajo /api/admin y controlan inventario interno del panel.
+// Por eso primero exigimos sesion valida y despues limitamos a roles del panel.
+productRoutes.use(requireAuth);
+productRoutes.use(authorizeRoles(OWNER_ROLE, STAFF_ROLE));
 
-      if (!product) {
-        return res.status(400).json({
-          status: 400,
-          error: "Error creating product"
-        });
-      }
+function sendProductError(res, error) {
+  return res.status(error.statusCode || 500).json({
+    status: error.statusCode || 500,
+    error: error.message,
+    code: error.code,
+  });
+}
 
-      return res.status(201).json({
-        status: 201,
-        data: product
-      });
+productRoutes.post('/products', validateCreateProduct, async (req, res) => {
+  try {
+    const product = await productService.create(req.body);
 
-    } catch (error) {
-      return res.status(500).json({
-        status: 500,
-        error: error.message
+    if (!product) {
+      return res.status(400).json({
+        status: 400,
+        error: 'Error creating product',
       });
     }
-  }
-);
 
-// Obtener todos los products
-productRoutes.get("/products", async (req, res) => {
+    return res.status(201).json({
+      status: 201,
+      data: product,
+    });
+  } catch (error) {
+    return sendProductError(res, error);
+  }
+});
+
+productRoutes.get('/products', async (req, res) => {
   try {
     const products = await productService.getAll();
-    res.status(200).json({ status: 200, data: products });
+    return res.status(200).json({ status: 200, data: products });
   } catch (error) {
-    res.status(500).json({ status: 500, error: error.message });
+    return sendProductError(res, error);
   }
 });
 
-// Obtener un product por ID
-productRoutes.get("/products/:id", validateProductId, async (req, res) => {
+productRoutes.get('/products/:id', validateProductId, async (req, res) => {
   try {
     const product = await productService.getById(req.params.id);
-    res.status(200).json({ status: 200, data: product });
+    return res.status(200).json({ status: 200, data: product });
   } catch (error) {
-    res.status(404).json({ status: 404, error: error.message });
+    return sendProductError(res, error);
   }
 });
 
-// Update product por ID
 productRoutes.put(
-  "/products/:id",
+  '/products/:id',
   validateProductId,
   validateCreateProduct,
   async (req, res) => {
     try {
       const product = await productService.update(req.params.id, req.body);
-      res.status(200).json({ status: 200, data: product });
+      return res.status(200).json({ status: 200, data: product });
     } catch (error) {
-      res.status(404).json({ status: 404, error: error.message });
+      return sendProductError(res, error);
     }
   },
 );
 
-// Delete product por ID
-productRoutes.delete("/products/:id", validateProductId, async (req, res) => {
+productRoutes.post('/products/:id/publish', validateProductId, async (req, res) => {
+  try {
+    const product = await productService.publish(req.params.id);
+    return res.status(200).json({ status: 200, data: product });
+  } catch (error) {
+    return sendProductError(res, error);
+  }
+});
+
+productRoutes.post('/products/:id/unpublish', validateProductId, async (req, res) => {
+  try {
+    const product = await productService.unpublish(req.params.id);
+    return res.status(200).json({ status: 200, data: product });
+  } catch (error) {
+    return sendProductError(res, error);
+  }
+});
+
+productRoutes.post('/products/:id/activate', validateProductId, async (req, res) => {
+  try {
+    const product = await productService.activate(req.params.id);
+    return res.status(200).json({ status: 200, data: product });
+  } catch (error) {
+    return sendProductError(res, error);
+  }
+});
+
+productRoutes.post('/products/:id/inactivate', validateProductId, async (req, res) => {
+  try {
+    const product = await productService.inactivate(req.params.id);
+    return res.status(200).json({ status: 200, data: product });
+  } catch (error) {
+    return sendProductError(res, error);
+  }
+});
+
+productRoutes.post('/products/:id/mark-sold', validateProductId, async (req, res) => {
+  try {
+    const product = await productService.markSold(req.params.id);
+    return res.status(200).json({ status: 200, data: product });
+  } catch (error) {
+    return sendProductError(res, error);
+  }
+});
+
+productRoutes.post('/products/:id/mark-available', validateProductId, async (req, res) => {
+  try {
+    const product = await productService.markAvailable(req.params.id);
+    return res.status(200).json({ status: 200, data: product });
+  } catch (error) {
+    return sendProductError(res, error);
+  }
+});
+
+productRoutes.delete('/products/:id', validateProductId, async (req, res) => {
   try {
     const product = await productService.delete(req.params.id);
-    res.status(200).json({ status: 200, data: product });
+    return res.status(200).json({ status: 200, data: product });
   } catch (error) {
-    res.status(404).json({ status: 404, error: error.message });
+    return sendProductError(res, error);
   }
 });
 

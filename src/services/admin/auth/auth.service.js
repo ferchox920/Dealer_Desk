@@ -1,8 +1,15 @@
 // ============================================================================
 // auth.service.js
 //
-// Login base del panel admin.
-// Usa la tabla admins como fuente de owner/staff del sistema actual.
+// Login y sesiones del panel admin.
+// Solo maneja:
+//  - login
+//  - refresh
+//  - logout
+//  - me
+//
+// Los flujos de invitacion y reset por correo viven en
+// password-action.service.js para no mezclar responsabilidades.
 // ============================================================================
 
 import { v4 as uuidv4 } from 'uuid';
@@ -10,6 +17,7 @@ import db from '../../../config/db/db.js';
 import Admin from '../../../entities/admin.entity.js';
 import { createHttpError } from '../../../utils/errors/app-error.util.js';
 import { trimBoundaryWhitespace } from '../../../utils/normalizers/string-normalizer.util.js';
+import { serializeAdmin } from '../../../utils/serializers/admin.serializer.js';
 import { verifyPassword } from '../../../utils/security/password.util.js';
 import {
   generateOpaqueRefreshToken,
@@ -23,20 +31,6 @@ function normalizeEmail(email) {
 
 function normalizePassword(password) {
   return trimBoundaryWhitespace(password);
-}
-
-function serializeAdmin(admin) {
-  return {
-    id: admin.id,
-    name: admin.name,
-    email: admin.email,
-    role: admin.role,
-    is_active: admin.is_active,
-    last_login_at: admin.last_login_at,
-    created_by_admin_id: admin.created_by_admin_id,
-    created_at: admin.created_at,
-    updated_at: admin.updated_at,
-  };
 }
 
 function buildRefreshTokenExpiryDate() {
@@ -97,12 +91,12 @@ async function revokeRefreshSession(client, sessionId) {
 
 class AuthService {
   async login({ email, password, userAgent, ipAddress }) {
-    // Normalizar el email evita bugs clásicos como:
-    // "Owner@Mail.com" vs "owner@mail.com".
     const normalizedEmail = normalizeEmail(email);
     const normalizedPassword = normalizePassword(password);
     const admin = await Admin.findOneByEmail(normalizedEmail);
 
+    // Mensaje unico para no filtrar si el email existe, esta inactivo
+    // o todavia no tiene password configurada.
     if (!admin || !admin.is_active) {
       throw createHttpError(401, 'Invalid credentials.', 'AUTH_INVALID_CREDENTIALS');
     }
@@ -125,8 +119,6 @@ class AuthService {
         expiresAt,
       });
 
-      // last_login_at te sirve luego para auditoría básica y para mostrar
-      // en el panel cuándo fue el último acceso del usuario.
       await client.query(
         `
           UPDATE admins
@@ -176,9 +168,6 @@ class AuthService {
       const newRefreshToken = generateOpaqueRefreshToken();
       const newExpiresAt = buildRefreshTokenExpiryDate();
 
-      // Rotación de refresh token:
-      // el token viejo se invalida y se crea uno nuevo.
-      // Esto reduce el tiempo de vida útil si el viejo se filtrara.
       await revokeRefreshSession(client, session.id);
       await createRefreshSession(client, {
         adminId: admin.id,

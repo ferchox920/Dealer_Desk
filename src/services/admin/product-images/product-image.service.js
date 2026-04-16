@@ -21,6 +21,7 @@ import Product from '../../../entities/product.entity.js';
 import cloudinary from '../../../config/cloudinary/cloudinary.js';
 import db from '../../../config/db/db.js';
 import { buildProductImagesFolder } from '../../../utils/cloudinary/cloudinary-folder.util.js';
+import { createHttpError } from '../../../utils/errors/app-error.util.js';
 
 class ProductImageService {
 
@@ -39,7 +40,9 @@ class ProductImageService {
   // así que la carpeta cae en "default-system" (ver cloudinary-folder.util.js).
   async create(productId, files, systemContext = {}) {
     const product = await Product.findByPk(productId);
-    if (!product) throw new Error('Product not found.');
+    if (!product) {
+      throw createHttpError(404, 'Product not found.', 'PRODUCT_NOT_FOUND');
+    }
     const folder = buildProductImagesFolder({ ...systemContext, productId });
 
     // Subida a Cloudinary: convierte cada archivo de memoria (buffer) a base64
@@ -95,7 +98,9 @@ class ProductImageService {
   // Obtiene todas las imágenes de un producto, ordenadas por posición en la galería
   async getByProductId(productId) {
     const product = await Product.findByPk(productId);
-    if (!product) throw new Error('Product not found.');
+    if (!product) {
+      throw createHttpError(404, 'Product not found.', 'PRODUCT_NOT_FOUND');
+    }
 
     return await ProductImage.findAll({
       where: { product_id: productId },
@@ -106,16 +111,27 @@ class ProductImageService {
   // Obtiene una imagen por su ID, verificando que pertenezca al producto indicado
   async getById(productId, imageId) {
     const image = await ProductImage.findByPk(imageId);
-    if (!image) throw new Error('Image not found.');
-    if (image.product_id !== productId) throw new Error('Image does not belong to this product.');
+    if (!image) {
+      throw createHttpError(404, 'Image not found.', 'IMAGE_NOT_FOUND');
+    }
+
+    if (image.product_id !== productId) {
+      throw createHttpError(404, 'Image does not belong to this product.', 'IMAGE_PRODUCT_MISMATCH');
+    }
+
     return image;
   }
 
   // Actualiza campos editables de una imagen (sort_order, is_cover)
   async update(productId, imageId, data) {
     const image = await ProductImage.findByPk(imageId);
-    if (!image) throw new Error('Image not found.');
-    if (image.product_id !== productId) throw new Error('Image does not belong to this product.');
+    if (!image) {
+      throw createHttpError(404, 'Image not found.', 'IMAGE_NOT_FOUND');
+    }
+
+    if (image.product_id !== productId) {
+      throw createHttpError(404, 'Image does not belong to this product.', 'IMAGE_PRODUCT_MISMATCH');
+    }
 
     // Si una imagen pasa a ser portada, las demas del mismo producto dejan de serlo.
     if (data.is_cover === true) {
@@ -125,13 +141,66 @@ class ProductImageService {
     return await image.update(data);
   }
 
+  async reorder(productId, orderedImageIds) {
+    const product = await Product.findByPk(productId);
+
+    if (!product) {
+      throw createHttpError(404, 'Product not found.', 'PRODUCT_NOT_FOUND');
+    }
+
+    const images = await ProductImage.findAll({
+      where: { product_id: productId },
+      order: [['sort_order', 'ASC']],
+    });
+
+    if (images.length === 0) {
+      throw createHttpError(409, 'This product has no images to reorder.', 'PRODUCT_HAS_NO_IMAGES');
+    }
+
+    const currentIds = images.map((image) => image.id);
+    const hasSameLength = currentIds.length === orderedImageIds.length;
+    const hasDuplicates = new Set(orderedImageIds).size !== orderedImageIds.length;
+    const includesUnknownId = orderedImageIds.some((imageId) => !currentIds.includes(imageId));
+
+    if (!hasSameLength || hasDuplicates || includesUnknownId) {
+      throw createHttpError(
+        400,
+        'orderedImageIds must include each product image exactly once.',
+        'IMAGE_REORDER_INVALID_ORDER',
+      );
+    }
+
+    await db.withTransaction(async (client) => {
+      const executor = client.query.bind(client);
+
+      await ProductImage.clearCoverByProductId(productId, executor);
+
+      for (const [index, imageId] of orderedImageIds.entries()) {
+        await ProductImage.update(imageId, {
+          sort_order: index,
+          is_cover: index === 0,
+        }, executor);
+      }
+    });
+
+    return await ProductImage.findAll({
+      where: { product_id: productId },
+      order: [['sort_order', 'ASC']],
+    });
+  }
+
   // Elimina la imagen de Cloudinary y su registro en la DB.
   // Si la imagen eliminada era la portada, promueve automáticamente
   // la primera imagen restante (por sort_order) como nueva portada.
   async delete(productId, imageId) {
     const image = await ProductImage.findByPk(imageId);
-    if (!image) throw new Error('Image not found.');
-    if (image.product_id !== productId) throw new Error('Image does not belong to this product.');
+    if (!image) {
+      throw createHttpError(404, 'Image not found.', 'IMAGE_NOT_FOUND');
+    }
+
+    if (image.product_id !== productId) {
+      throw createHttpError(404, 'Image does not belong to this product.', 'IMAGE_PRODUCT_MISMATCH');
+    }
 
     await cloudinary.uploader.destroy(image.cloudinary_public_id);
     await image.destroy();

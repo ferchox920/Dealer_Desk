@@ -1,16 +1,26 @@
 // ============================================================================
 // user.service.js
 //
-// Gestión de usuarios del panel usando la tabla admins.
-// Decisión actual: no separar otra tabla "users" todavía.
-// owner/staff viven aquí y son creados/gestionados desde el panel admin.
+// Gestion de usuarios administrativos del panel.
+// Regla nueva:
+//  - si create recibe password => se guarda manualmente
+//  - si create no recibe password => el usuario nace pendiente y recibe mail
+//
+// La idea es mantener el codigo lineal:
+// validar -> crear/actualizar -> invalidar tokens si hace falta -> responder.
 // ============================================================================
 
+import db from '../../../config/db/db.js';
 import Admin from '../../../entities/admin.entity.js';
 import { OWNER_ROLE, STAFF_ROLE } from '../../../constants/admin-roles.js';
+import passwordActionService from '../auth/password-action.service.js';
 import { createHttpError } from '../../../utils/errors/app-error.util.js';
 import { trimBoundaryWhitespace } from '../../../utils/normalizers/string-normalizer.util.js';
-import { hashPassword } from '../../../utils/security/password.util.js';
+import { serializeAdmin } from '../../../utils/serializers/admin.serializer.js';
+import {
+  getPasswordPolicyError,
+  hashPassword,
+} from '../../../utils/security/password.util.js';
 
 function normalizeEmail(email) {
   return trimBoundaryWhitespace(email).toLowerCase();
@@ -30,20 +40,6 @@ function normalizePassword(password) {
   return trimBoundaryWhitespace(password);
 }
 
-function serializeAdmin(admin) {
-  return {
-    id: admin.id,
-    name: admin.name,
-    email: admin.email,
-    role: admin.role,
-    is_active: admin.is_active,
-    last_login_at: admin.last_login_at,
-    created_by_admin_id: admin.created_by_admin_id,
-    created_at: admin.created_at,
-    updated_at: admin.updated_at,
-  };
-}
-
 async function ensureEmailAvailable(email, currentId = null) {
   const existingAdmin = await Admin.findOneByEmail(email);
 
@@ -53,9 +49,6 @@ async function ensureEmailAvailable(email, currentId = null) {
 }
 
 async function ensureOwnerSafety(targetAdmin, updates = {}, actorId = null) {
-  // Este guardrail evita dejar el sistema sin ningún owner activo.
-  // Es una regla pequeña, pero protege mucho: sin ella, podrías bloquear
-  // la administración del sistema por accidente.
   const willDisableOwner = targetAdmin.role === OWNER_ROLE && updates.is_active === false;
   const willDemoteOwner = targetAdmin.role === OWNER_ROLE && updates.role === STAFF_ROLE;
 
@@ -74,10 +67,17 @@ async function ensureOwnerSafety(targetAdmin, updates = {}, actorId = null) {
   }
 }
 
+function buildSerializedUserResponse(admin, extra = {}) {
+  return {
+    ...serializeAdmin(admin),
+    ...extra,
+  };
+}
+
 class UserService {
   async list(filters = {}) {
     const admins = await Admin.findAll(filters);
-    return admins.map(serializeAdmin);
+    return admins.map((admin) => buildSerializedUserResponse(admin));
   }
 
   async getById(id) {
@@ -87,26 +87,79 @@ class UserService {
       throw createHttpError(404, 'Admin not found.', 'ADMIN_NOT_FOUND');
     }
 
-    return serializeAdmin(admin);
+    return buildSerializedUserResponse(admin);
   }
 
   async create(data, actor = null) {
     const normalizedEmail = normalizeEmail(data.email);
+    const normalizedPassword = data.password === undefined ? '' : normalizePassword(data.password);
+    const useInviteFlow = normalizedPassword.length === 0;
+
     await ensureEmailAvailable(normalizedEmail);
 
-    // Aquí seguimos creando registros en admins porque HOY esa tabla representa
-    // los usuarios del panel. Si mañana cambias naming o arquitectura,
-    // este service te da un punto central para hacer la migración.
-    const admin = await Admin.create({
-      name: normalizeName(data.name),
-      email: normalizedEmail,
-      password_hash: await hashPassword(normalizePassword(data.password)),
-      role: data.role,
-      is_active: data.is_active ?? true,
-      created_by_admin_id: actor?.id ?? null,
+    if (useInviteFlow && data.is_active === false) {
+      throw createHttpError(
+        400,
+        'Invited users must remain active to receive the password setup email.',
+        'ADMIN_INVITE_REQUIRES_ACTIVE_USER',
+      );
+    }
+
+    if (!useInviteFlow) {
+      const passwordPolicyError = getPasswordPolicyError(normalizedPassword);
+
+      if (passwordPolicyError) {
+        throw createHttpError(400, passwordPolicyError, 'USER_PASSWORD_INVALID');
+      }
+    } else {
+      await passwordActionService.ensurePasswordActionMailReady();
+    }
+
+    let inviteTokenPayload = null;
+    const admin = await db.withTransaction(async (client) => {
+      const executor = client.query.bind(client);
+      const createdAdmin = await Admin.create(
+        {
+          name: normalizeName(data.name),
+          email: normalizedEmail,
+          password_hash: useInviteFlow ? null : await hashPassword(normalizedPassword),
+          role: data.role,
+          is_active: data.is_active ?? true,
+          created_by_admin_id: actor?.id ?? null,
+        },
+        executor,
+      );
+
+      if (useInviteFlow) {
+        inviteTokenPayload = await passwordActionService.createInviteRecordForAdmin(
+          createdAdmin,
+          {
+            requestedByAdminId: actor?.id ?? null,
+          },
+          executor,
+        );
+      }
+
+      return createdAdmin;
     });
 
-    return serializeAdmin(admin);
+    if (!useInviteFlow) {
+      return buildSerializedUserResponse(admin, {
+        invite_email_sent: null,
+        invite_expires_at: null,
+      });
+    }
+
+    const inviteDelivery = await passwordActionService.deliverInviteEmail(
+      admin,
+      inviteTokenPayload.plainToken,
+      inviteTokenPayload.expiresAt,
+    );
+
+    return buildSerializedUserResponse(admin, {
+      invite_email_sent: inviteDelivery.email_sent,
+      invite_expires_at: inviteDelivery.expires_at,
+    });
   }
 
   async update(id, data, actor = null) {
@@ -117,6 +170,7 @@ class UserService {
     }
 
     const updateData = {};
+    let shouldInvalidatePasswordTokens = false;
 
     if (data.name !== undefined) {
       updateData.name = normalizeName(data.name);
@@ -125,10 +179,22 @@ class UserService {
     if (data.email !== undefined) {
       updateData.email = normalizeEmail(data.email);
       await ensureEmailAvailable(updateData.email, admin.id);
+      shouldInvalidatePasswordTokens = true;
     }
 
     if (data.password !== undefined) {
-      updateData.password_hash = await hashPassword(normalizePassword(data.password));
+      const normalizedPassword = normalizePassword(data.password);
+
+      if (normalizedPassword.length > 0) {
+        const passwordPolicyError = getPasswordPolicyError(normalizedPassword);
+
+        if (passwordPolicyError) {
+          throw createHttpError(400, passwordPolicyError, 'USER_PASSWORD_INVALID');
+        }
+
+        updateData.password_hash = await hashPassword(normalizedPassword);
+        shouldInvalidatePasswordTokens = true;
+      }
     }
 
     if (data.role !== undefined) {
@@ -137,12 +203,40 @@ class UserService {
 
     if (data.is_active !== undefined) {
       updateData.is_active = data.is_active;
+
+      if (data.is_active === false) {
+        shouldInvalidatePasswordTokens = true;
+      }
     }
 
     await ensureOwnerSafety(admin, updateData, actor?.id ?? null);
 
     const updatedAdmin = await admin.update(updateData);
-    return serializeAdmin(updatedAdmin);
+
+    if (shouldInvalidatePasswordTokens) {
+      await passwordActionService.invalidateActiveTokensByAdminId(updatedAdmin.id);
+    }
+
+    return buildSerializedUserResponse(updatedAdmin);
+  }
+
+  async resendInvite(id, actor = null) {
+    await passwordActionService.ensurePasswordActionMailReady();
+
+    const admin = await Admin.findByPk(id);
+
+    if (!admin) {
+      throw createHttpError(404, 'Admin not found.', 'ADMIN_NOT_FOUND');
+    }
+
+    const inviteDelivery = await passwordActionService.issueInviteForAdmin(admin, {
+      requestedByAdminId: actor?.id ?? null,
+    });
+
+    return buildSerializedUserResponse(admin, {
+      invite_email_sent: inviteDelivery.email_sent,
+      invite_expires_at: inviteDelivery.expires_at,
+    });
   }
 
   async delete(id, actor = null) {
@@ -165,7 +259,7 @@ class UserService {
     }
 
     const deletedAdmin = await Admin.deleteById(id);
-    return serializeAdmin(deletedAdmin);
+    return buildSerializedUserResponse(deletedAdmin);
   }
 }
 

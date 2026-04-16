@@ -1,7 +1,8 @@
 // ============================================================================
 // auth.routes.js
 //
-// Rutas base de autenticación del panel.
+// Rutas publicas y privadas del modulo auth del panel.
+// Mantiene handlers delgados: validar -> delegar al service -> responder.
 // ============================================================================
 
 import express from 'express';
@@ -10,13 +11,25 @@ import {
   getRefreshTokenFromRequest,
   setRefreshTokenCookie,
 } from '../../../config/security/cookies.js';
-import authService from '../../../services/admin/auth/auth.service.js';
 import { requireAuth } from '../../../middlewares/auth/require-auth.js';
-import { validateLogin } from '../../../utils/validations/admin/auth/auth.validation.js';
+import {
+  forgotPasswordLimiter,
+  loginLimiter,
+  passwordActionLimiter,
+  refreshLimiter,
+} from '../../../middlewares/security/rate-limiters.js';
+import authService from '../../../services/admin/auth/auth.service.js';
+import passwordActionService from '../../../services/admin/auth/password-action.service.js';
+import {
+  validateCompletePasswordAction,
+  validateForgotPassword,
+  validateLogin,
+  validateVerifyPasswordAction,
+} from '../../../utils/validations/admin/auth/auth.validation.js';
 
 const authRoutes = express.Router();
 
-authRoutes.post('/login', validateLogin, async (req, res) => {
+authRoutes.post('/login', loginLimiter, validateLogin, async (req, res) => {
   try {
     const session = await authService.login({
       ...req.body,
@@ -24,8 +37,6 @@ authRoutes.post('/login', validateLogin, async (req, res) => {
       ipAddress: req.ip,
     });
 
-    // El refresh token viaja en cookie HttpOnly para que el frontend
-    // no tenga que guardarlo en localStorage ni manejarlo manualmente.
     setRefreshTokenCookie(res, session.refreshToken);
 
     return res.status(200).json({
@@ -44,12 +55,60 @@ authRoutes.post('/login', validateLogin, async (req, res) => {
   }
 });
 
-// refresh:
-// 1) lee la cookie HttpOnly
-// 2) valida que esa sesión siga vigente
-// 3) rota el refresh token
-// 4) devuelve un nuevo access token
-authRoutes.post('/refresh', async (req, res) => {
+authRoutes.post('/forgot-password', forgotPasswordLimiter, validateForgotPassword, async (req, res) => {
+  try {
+    await passwordActionService.requestForgotPassword(req.body);
+
+    return res.status(200).json({
+      status: 200,
+      data: {
+        message: 'If the account exists, a password email will be sent.',
+      },
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      status: error.statusCode || 500,
+      error: error.message,
+      code: error.code,
+    });
+  }
+});
+
+authRoutes.post('/password-action/verify', passwordActionLimiter, validateVerifyPasswordAction, async (req, res) => {
+  try {
+    const passwordAction = await passwordActionService.verifyPasswordAction(req.body);
+
+    return res.status(200).json({
+      status: 200,
+      data: passwordAction,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      status: error.statusCode || 500,
+      error: error.message,
+      code: error.code,
+    });
+  }
+});
+
+authRoutes.post('/password-action/complete', passwordActionLimiter, validateCompletePasswordAction, async (req, res) => {
+  try {
+    const result = await passwordActionService.completePasswordAction(req.body);
+
+    return res.status(200).json({
+      status: 200,
+      data: result,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      status: error.statusCode || 500,
+      error: error.message,
+      code: error.code,
+    });
+  }
+});
+
+authRoutes.post('/refresh', refreshLimiter, async (req, res) => {
   try {
     const session = await authService.refresh({
       refreshToken: getRefreshTokenFromRequest(req),
@@ -77,10 +136,6 @@ authRoutes.post('/refresh', async (req, res) => {
   }
 });
 
-// logout:
-// 1) intenta revocar la sesión actual si existe cookie
-// 2) limpia la cookie en el navegador
-// 3) responde OK aunque el frontend ya no tenga el token
 authRoutes.post('/logout', async (req, res) => {
   try {
     await authService.logout({

@@ -24,11 +24,13 @@ import {
 // (En Sequelize esto era automático con attributes o el modelo.)
 const PRODUCT_SELECT = `
   id,
+  internal_code,
   year,
   brand,
   model,
   mileage,
   price,
+  currency_code,
   drive_train,
   fuel_type,
   vin_number,
@@ -48,6 +50,7 @@ const MUTABLE_FIELDS = [
   'model',
   'mileage',
   'price',
+  'currency_code',
   'drive_train',
   'fuel_type',
   'vin_number',
@@ -178,12 +181,13 @@ const Product = {
       model: data.model,
       mileage: data.mileage,
       price: data.price,
+      currency_code: data.currency_code ?? 'USD',
       drive_train: data.drive_train,
       fuel_type: data.fuel_type,
       vin_number: data.vin_number,
       description: data.description ?? null,
-      publish_status: data.publish_status ?? 'draft',
-      sale_status: data.sale_status ?? 'available',
+      publish_status: 'draft',
+      sale_status: 'available',
     };
     const { columns, values, placeholders } = buildInsertParts(insertData);
 

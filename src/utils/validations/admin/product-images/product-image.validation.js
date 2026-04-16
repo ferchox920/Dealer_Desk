@@ -10,13 +10,12 @@
 //   - Si hay error → responden con JSON y el request se detiene ahí
 // ============================================================================
 
-import { createUuidParamValidator } from '../../shared/common.validation.js';
+import {
+  createUuidParamValidator,
+  pushBoundedIntegerValidation,
+} from '../../shared/common.validation.js';
 
-function validateNumber(body, field, errors) {
-  if (body[field] !== undefined && typeof body[field] !== 'number') {
-    errors.push({ code: `IMAGE_${field.toUpperCase()}_NOT_NUMBER`, field, message: `The ${field} must be a number.` });
-  }
-}
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function validateBoolean(body, field, errors) {
   if (body[field] !== undefined && typeof body[field] !== 'boolean') {
@@ -42,11 +41,43 @@ function validateUpdateImage(req, res, next) {
   const errors = [];
   const body = req.body;
 
-  validateNumber(body, 'sort_order', errors);
+  pushBoundedIntegerValidation(body, 'sort_order', errors, {
+    prefix: 'IMAGE',
+  });
   validateBoolean(body, 'is_cover', errors);
 
   if (errors.length > 0) {
     return res.status(400).json({ success: false, errors });
+  }
+
+  next();
+}
+
+function validateReorderImages(req, res, next) {
+  const orderedImageIds = req.body?.orderedImageIds;
+
+  if (!Array.isArray(orderedImageIds) || orderedImageIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      errors: [{
+        code: 'ORDERED_IMAGE_IDS_REQUIRED',
+        field: 'orderedImageIds',
+        message: 'orderedImageIds must be a non-empty array.',
+      }],
+    });
+  }
+
+  const hasInvalidId = orderedImageIds.some((value) => typeof value !== 'string' || !UUID_PATTERN.test(value));
+
+  if (hasInvalidId) {
+    return res.status(400).json({
+      success: false,
+      errors: [{
+        code: 'ORDERED_IMAGE_IDS_INVALID',
+        field: 'orderedImageIds',
+        message: 'Each orderedImageId must be a valid UUID.',
+      }],
+    });
   }
 
   next();
@@ -60,4 +91,4 @@ const validateImageId = createUuidParamValidator({
   responseShape: 'success',
 });
 
-export { validateImageFiles, validateUpdateImage, validateImageId };
+export { validateImageFiles, validateUpdateImage, validateReorderImages, validateImageId };

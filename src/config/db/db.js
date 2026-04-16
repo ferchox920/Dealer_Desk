@@ -20,6 +20,13 @@
 
 import pg from 'pg';
 import { getAdminRolesSqlList } from '../../constants/admin-roles.js';
+import {
+  PRODUCT_MILEAGE_MAX,
+  PRODUCT_MILEAGE_MIN,
+  PRODUCT_PRICE_RANGES,
+  PRODUCT_YEAR_MIN,
+  getProductYearMax,
+} from '../../constants/product-ranges.js';
 
 const { Pool } = pg;
 const ADMIN_ROLES_SQL_LIST = getAdminRolesSqlList();
@@ -91,9 +98,146 @@ async function authenticate() {
 // Solo se usa cuando DB_SYNC_MODE=force.
 async function dropSchema(client) {
   await client.query('DROP TABLE IF EXISTS refresh_sessions');
+  await client.query('DROP TABLE IF EXISTS password_action_tokens');
   await client.query('DROP TABLE IF EXISTS product_images');
   await client.query('DROP TABLE IF EXISTS products');
+  await client.query('DROP SEQUENCE IF EXISTS products_internal_code_seq');
   await client.query('DROP TABLE IF EXISTS admins');
+}
+
+async function ensureProductsInternalCode(client) {
+  await client.query(`
+    CREATE SEQUENCE IF NOT EXISTS products_internal_code_seq
+    START WITH 1
+    INCREMENT BY 1
+    MINVALUE 1
+  `);
+
+  await client.query(`
+    ALTER TABLE products
+    ADD COLUMN IF NOT EXISTS internal_code VARCHAR(50)
+  `);
+
+  await client.query(`
+    ALTER TABLE products
+    ALTER COLUMN internal_code SET DEFAULT LPAD(nextval('products_internal_code_seq')::text, 3, '0')
+  `);
+
+  await client.query(`
+    WITH max_existing AS (
+      SELECT COALESCE(
+        -- internal_code se guarda como texto porque es visible al usuario,
+        -- pero para calcular máximos usamos bigint y evitamos topes de integer.
+        MAX(CASE WHEN internal_code ~ '^[0-9]+$' THEN internal_code::bigint END),
+        0
+      ) AS value
+      FROM products
+    ),
+    missing_codes AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) AS row_number
+      FROM products
+      WHERE internal_code IS NULL OR internal_code = ''
+    )
+    UPDATE products AS product
+    SET internal_code = LPAD((max_existing.value + missing_codes.row_number)::text, 3, '0')
+    FROM missing_codes, max_existing
+    WHERE product.id = missing_codes.id
+  `);
+
+  const maxCodeResult = await client.query(`
+    SELECT COALESCE(
+      MAX(CASE WHEN internal_code ~ '^[0-9]+$' THEN internal_code::bigint END),
+      0
+    ) AS value
+    FROM products
+  `);
+
+  // pg devuelve bigint como string por defecto.
+  // Lo conservamos así para no pasar por Number() y evitar pérdida de precisión.
+  const maxCode = String(maxCodeResult.rows[0]?.value ?? '0');
+  const hasExistingNumericCodes = maxCode !== '0';
+
+  await client.query(`
+    SELECT setval(
+      'products_internal_code_seq',
+      $1::bigint,
+      $2
+    )
+  `, [
+    hasExistingNumericCodes ? maxCode : '1',
+    hasExistingNumericCodes,
+  ]);
+
+  await client.query(`
+    ALTER TABLE products
+    ALTER COLUMN internal_code SET NOT NULL
+  `);
+
+  await client.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_products_internal_code
+    ON products(internal_code)
+  `);
+}
+
+async function ensureProductsCurrency(client) {
+  await client.query(`
+    ALTER TABLE products
+    ADD COLUMN IF NOT EXISTS currency_code VARCHAR(10)
+  `);
+
+  await client.query(`
+    UPDATE products
+    SET currency_code = 'USD'
+    WHERE currency_code IS NULL OR currency_code = ''
+  `);
+
+  await client.query(`
+    ALTER TABLE products
+    ALTER COLUMN currency_code SET DEFAULT 'USD'
+  `);
+
+  await client.query(`
+    ALTER TABLE products
+    ALTER COLUMN currency_code SET NOT NULL
+  `);
+
+  await client.query('ALTER TABLE products DROP CONSTRAINT IF EXISTS products_currency_code_check');
+  await client.query(`
+    ALTER TABLE products
+    ADD CONSTRAINT products_currency_code_check
+    CHECK (currency_code IN ('CLP', 'USD'))
+  `);
+}
+
+async function ensureProductsNumericBounds(client) {
+  const productYearMax = getProductYearMax();
+
+  await client.query('ALTER TABLE products DROP CONSTRAINT IF EXISTS products_year_range_check');
+  await client.query(`
+    ALTER TABLE products
+    ADD CONSTRAINT products_year_range_check
+    CHECK (year BETWEEN ${PRODUCT_YEAR_MIN} AND ${productYearMax})
+  `);
+
+  await client.query('ALTER TABLE products DROP CONSTRAINT IF EXISTS products_mileage_range_check');
+  await client.query(`
+    ALTER TABLE products
+    ADD CONSTRAINT products_mileage_range_check
+    CHECK (mileage BETWEEN ${PRODUCT_MILEAGE_MIN} AND ${PRODUCT_MILEAGE_MAX})
+  `);
+
+  await client.query('ALTER TABLE products DROP CONSTRAINT IF EXISTS products_price_by_currency_check');
+  await client.query(`
+    ALTER TABLE products
+    ADD CONSTRAINT products_price_by_currency_check
+    CHECK (
+      (currency_code = 'USD' AND price BETWEEN ${PRODUCT_PRICE_RANGES.USD.min} AND ${PRODUCT_PRICE_RANGES.USD.max})
+      OR
+      (currency_code = 'CLP' AND price BETWEEN ${PRODUCT_PRICE_RANGES.CLP.min} AND ${PRODUCT_PRICE_RANGES.CLP.max})
+    )
+  `);
 }
 
 // Crea las tablas si no existen. También crea índices.
@@ -105,7 +249,7 @@ async function ensureTables(client) {
       id UUID PRIMARY KEY,
       name VARCHAR(255),
       email VARCHAR(255) NOT NULL UNIQUE,
-      password_hash VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255),
       role VARCHAR(50) NOT NULL CONSTRAINT admins_role_check CHECK (role IN (${ADMIN_ROLES_SQL_LIST})),
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
       last_login_at TIMESTAMPTZ,
@@ -116,6 +260,7 @@ async function ensureTables(client) {
   `);
 
   await client.query('ALTER TABLE admins ADD COLUMN IF NOT EXISTS name VARCHAR(255)');
+  await client.query('ALTER TABLE admins ALTER COLUMN password_hash DROP NOT NULL');
   await client.query('ALTER TABLE admins ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ');
   await client.query('ALTER TABLE admins ADD COLUMN IF NOT EXISTS created_by_admin_id UUID REFERENCES admins(id) ON DELETE SET NULL');
   // Reinstalamos la constraint con nombre fijo para que, cuando en el futuro
@@ -158,13 +303,41 @@ async function ensureTables(client) {
   await client.query('CREATE INDEX IF NOT EXISTS idx_refresh_sessions_expires_at ON refresh_sessions(expires_at)');
 
   await client.query(`
+    CREATE TABLE IF NOT EXISTS password_action_tokens (
+      id UUID PRIMARY KEY,
+      admin_id UUID NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+      purpose VARCHAR(50) NOT NULL CHECK (purpose IN ('invite', 'forgot_password')),
+      token_hash VARCHAR(255) NOT NULL,
+      delivery_email VARCHAR(255) NOT NULL,
+      requested_by_admin_id UUID REFERENCES admins(id) ON DELETE SET NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // token_hash queda unico para que no exista ambiguedad al verificar.
+  await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_password_action_tokens_token_hash ON password_action_tokens(token_hash)');
+  await client.query('CREATE INDEX IF NOT EXISTS idx_password_action_tokens_admin_id ON password_action_tokens(admin_id)');
+  await client.query('CREATE INDEX IF NOT EXISTS idx_password_action_tokens_expires_at ON password_action_tokens(expires_at)');
+
+  await client.query(`
+    CREATE SEQUENCE IF NOT EXISTS products_internal_code_seq
+    START WITH 1
+    INCREMENT BY 1
+    MINVALUE 1
+  `);
+
+  await client.query(`
     CREATE TABLE IF NOT EXISTS products (
       id UUID PRIMARY KEY,
+      internal_code VARCHAR(50) NOT NULL DEFAULT LPAD(nextval('products_internal_code_seq')::text, 3, '0'),
       year INTEGER NOT NULL,
       brand VARCHAR(255) NOT NULL,
       model VARCHAR(255) NOT NULL,
       mileage INTEGER NOT NULL,
       price INTEGER NOT NULL,
+      currency_code VARCHAR(10) NOT NULL DEFAULT 'USD' CHECK (currency_code IN ('CLP', 'USD')),
       drive_train VARCHAR(255) NOT NULL,
       fuel_type VARCHAR(255) NOT NULL,
       vin_number VARCHAR(255) NOT NULL,
@@ -175,6 +348,10 @@ async function ensureTables(client) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  await ensureProductsInternalCode(client);
+  await ensureProductsCurrency(client);
+  await ensureProductsNumericBounds(client);
 
   await client.query(`
     CREATE TABLE IF NOT EXISTS product_images (
