@@ -38,6 +38,10 @@ function assertPriceWithinCurrencyRange(currencyCode, price) {
 }
 
 class ProductService {
+  serializePublicCards(products) {
+    return products.map((item) => serializePublicCatalogCard(item));
+  }
+
   async requireProduct(id) {
     const product = await Product.findByPk(id);
 
@@ -91,7 +95,7 @@ class ProductService {
     });
 
     return {
-      items: result.items.map((item) => serializePublicCatalogCard(item)),
+      items: this.serializePublicCards(result.items),
       pagination: {
         page: filters.page ?? 1,
         limit: filters.limit ?? 24,
@@ -128,6 +132,58 @@ class ProductService {
     }
 
     return serializePublicCatalogDetail(product);
+  }
+
+  async getPublicFeatured(limit = 6) {
+    const products = await Product.findPublicFeatured({
+      limit,
+      include: [{
+        model: ProductImage,
+        as: 'images',
+        where: { is_cover: true },
+        required: false,
+      }],
+    });
+
+    return this.serializePublicCards(products);
+  }
+
+  async getPublicRecent(limit = 6) {
+    const products = await Product.findPublicRecent({
+      limit,
+      include: [{
+        model: ProductImage,
+        as: 'images',
+        where: { is_cover: true },
+        required: false,
+      }],
+    });
+
+    return this.serializePublicCards(products);
+  }
+
+  async getPublicSimilar(id, limit = 4) {
+    const baseProduct = await Product.findPublicByPk(id);
+
+    if (!baseProduct) {
+      throw createHttpError(404, 'Public product not found.', 'PUBLIC_PRODUCT_NOT_FOUND');
+    }
+
+    const similarProducts = await Product.findPublicSimilar({
+      productId: id,
+      brand: baseProduct.brand,
+      model: baseProduct.model,
+      year: baseProduct.year,
+      limit,
+      include: [{
+        model: ProductImage,
+        as: 'images',
+        where: { is_cover: true },
+        required: false,
+      }],
+    });
+
+    return this.serializePublicCards(similarProducts);
   }
 
   async getPublicBrands() {

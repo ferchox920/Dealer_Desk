@@ -28,6 +28,7 @@ const REQUIRED_PRODUCT_FIELDS = [
   'vin_number',
 ];
 const MAX_PUBLIC_CATALOG_LIMIT = 60;
+const MAX_PUBLIC_COLLECTION_LIMIT = 24;
 const ALLOWED_PUBLIC_CATALOG_SORT_FIELDS = ['created_at', 'price', 'year'];
 const ALLOWED_PUBLIC_CATALOG_SORT_DIRECTIONS = ['asc', 'desc'];
 
@@ -206,6 +207,24 @@ function validatePublicCatalogQuery(req, res, next) {
   return next();
 }
 
+function validatePublicCollectionLimitQuery(req, res, next) {
+  const errors = [];
+  const limit = parseOptionalInteger(req.query.limit, 'limit', errors, {
+    min: 1,
+    max: MAX_PUBLIC_COLLECTION_LIMIT,
+  }) ?? 6;
+
+  if (errors.length > 0) {
+    return res.status(400).json({
+      status: 400,
+      errors,
+    });
+  }
+
+  req.publicCollectionLimit = limit;
+  return next();
+}
+
 function validateProductPayload(body, errors, { requireAllFields = false } = {}) {
   if (requireAllFields) {
     REQUIRED_PRODUCT_FIELDS.forEach((field) => validateRequiredField(body, field, errors));
@@ -272,6 +291,7 @@ const validateProductId = createUuidParamValidator({
 
 export {
   validateCreateProduct,
+  validatePublicCollectionLimitQuery,
   validateProductId,
   validatePublicCatalogQuery,
   validateUpdateProduct,

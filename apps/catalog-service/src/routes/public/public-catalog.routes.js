@@ -1,6 +1,7 @@
 import express from 'express';
 import productService from '../../services/products/product.service.js';
 import {
+  validatePublicCollectionLimitQuery,
   validateProductId,
   validatePublicCatalogQuery,
 } from '../../utils/validations/products/product.validation.js';
@@ -62,6 +63,61 @@ publicCatalogRoutes.get('/catalog/filters/models', async (req, res) => {
     return sendPublicCatalogError(res, error);
   }
 });
+
+publicCatalogRoutes.get(
+  '/catalog/sections/featured',
+  validatePublicCollectionLimitQuery,
+  async (req, res) => {
+    try {
+      const products = await productService.getPublicFeatured(req.publicCollectionLimit);
+
+      return res.status(200).json({
+        status: 200,
+        data: products,
+      });
+    } catch (error) {
+      return sendPublicCatalogError(res, error);
+    }
+  },
+);
+
+publicCatalogRoutes.get(
+  '/catalog/sections/recent',
+  validatePublicCollectionLimitQuery,
+  async (req, res) => {
+    try {
+      const products = await productService.getPublicRecent(req.publicCollectionLimit);
+
+      return res.status(200).json({
+        status: 200,
+        data: products,
+      });
+    } catch (error) {
+      return sendPublicCatalogError(res, error);
+    }
+  },
+);
+
+publicCatalogRoutes.get(
+  '/catalog/products/:id/similar',
+  validateProductId,
+  validatePublicCollectionLimitQuery,
+  async (req, res) => {
+    try {
+      const products = await productService.getPublicSimilar(
+        req.params.id,
+        req.publicCollectionLimit,
+      );
+
+      return res.status(200).json({
+        status: 200,
+        data: products,
+      });
+    } catch (error) {
+      return sendPublicCatalogError(res, error);
+    }
+  },
+);
 
 publicCatalogRoutes.get('/catalog/products/:id', validateProductId, async (req, res) => {
   try {

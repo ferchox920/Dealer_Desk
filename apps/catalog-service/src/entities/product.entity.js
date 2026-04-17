@@ -231,6 +231,51 @@ function buildPublicFilters(options = {}) {
   };
 }
 
+function buildPublicExcludeIdsClause(excludeIds = [], startIndex = 1) {
+  const normalizedIds = Array.isArray(excludeIds)
+    ? excludeIds.filter((value) => typeof value === 'string' && value.trim().length > 0)
+    : [];
+
+  if (normalizedIds.length === 0) {
+    return {
+      clause: '',
+      values: [],
+    };
+  }
+
+  return {
+    clause: `AND id <> ALL(${buildPlaceholder(startIndex)}::uuid[])`,
+    values: [normalizedIds],
+  };
+}
+
+async function attachIncludedImages(products, options = {}) {
+  if (!shouldIncludeImages(options) || products.length === 0) {
+    return products;
+  }
+
+  const imagesByProductId = await loadImagesByProductIds(
+    products.map((product) => product.id),
+    coverOnlyFromOptions(options),
+  );
+
+  for (const product of products) {
+    product.images = imagesByProductId.get(product.id) ?? [];
+  }
+
+  return products;
+}
+
+async function buildPublicCollection(rows, options = {}) {
+  const products = rows.map((row) => {
+    const product = hydrateProduct(row);
+    product.images = [];
+    return product;
+  });
+
+  return await attachIncludedImages(products, options);
+}
+
 const Product = {
   // Crea un producto nuevo en la DB y devuelve el registro completo.
   //
@@ -362,24 +407,7 @@ const Product = {
       filters.values,
     );
 
-    const products = rows.map((row) => {
-      const product = hydrateProduct(row);
-      product.images = [];
-      return product;
-    });
-
-    if (!shouldIncludeImages(options)) {
-      return products;
-    }
-
-    const imagesByProductId = await loadImagesByProductIds(
-      products.map((product) => product.id),
-      coverOnlyFromOptions(options),
-    );
-
-    for (const product of products) {
-      product.images = imagesByProductId.get(product.id) ?? [];
-    }
+    const products = await buildPublicCollection(rows, options);
 
     return {
       items: products,
@@ -450,6 +478,90 @@ const Product = {
     );
 
     return rows;
+  },
+
+  async findPublicFeatured(options = {}) {
+    const limit = typeof options.limit === 'number' ? options.limit : 6;
+
+    const { rows } = await query(
+      `
+        SELECT ${PRODUCT_SELECT}
+        FROM products
+        WHERE ${PUBLIC_PRODUCT_BASE_WHERE}
+        ORDER BY year DESC, created_at DESC, price DESC
+        LIMIT ${buildPlaceholder(1)}
+      `,
+      [limit],
+    );
+
+    return await buildPublicCollection(rows, options);
+  },
+
+  async findPublicRecent(options = {}) {
+    const limit = typeof options.limit === 'number' ? options.limit : 6;
+    const excludeIds = buildPublicExcludeIdsClause(options.excludeIds, 2);
+    const values = [limit, ...excludeIds.values];
+
+    const { rows } = await query(
+      `
+        SELECT ${PRODUCT_SELECT}
+        FROM products
+        WHERE ${PUBLIC_PRODUCT_BASE_WHERE}
+        ${excludeIds.clause}
+        ORDER BY created_at DESC
+        LIMIT ${buildPlaceholder(1)}
+      `,
+      values,
+    );
+
+    return await buildPublicCollection(rows, options);
+  },
+
+  async findPublicSimilar(options = {}) {
+    const limit = typeof options.limit === 'number' ? options.limit : 4;
+    const values = [
+      options.productId,
+      options.brand?.trim().toLowerCase() ?? '',
+      options.model?.trim().toLowerCase() ?? '',
+      options.year ?? 0,
+      limit,
+    ];
+
+    const { rows } = await query(
+      `
+        SELECT ${PRODUCT_SELECT}
+        FROM products
+        WHERE ${PUBLIC_PRODUCT_BASE_WHERE}
+          AND id <> ${buildPlaceholder(1)}
+          AND LOWER(brand) = ${buildPlaceholder(2)}
+        ORDER BY
+          CASE
+            WHEN LOWER(model) = ${buildPlaceholder(3)} THEN 0
+            ELSE 1
+          END ASC,
+          ABS(year - ${buildPlaceholder(4)}) ASC,
+          created_at DESC
+        LIMIT ${buildPlaceholder(5)}
+      `,
+      values,
+    );
+
+    const primaryMatches = await buildPublicCollection(rows, options);
+
+    if (primaryMatches.length >= limit) {
+      return primaryMatches;
+    }
+
+    const fallbackMatches = await this.findPublicRecent({
+      ...options,
+      limit: limit - primaryMatches.length,
+      excludeIds: [
+        options.productId,
+        ...primaryMatches.map((product) => product.id),
+      ],
+    });
+
+    return [...primaryMatches, ...fallbackMatches];
   },
 
   // Actualiza solo los campos permitidos (MUTABLE_FIELDS) de un producto.
