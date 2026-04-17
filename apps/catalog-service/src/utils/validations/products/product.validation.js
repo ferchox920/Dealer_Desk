@@ -27,6 +27,7 @@ const REQUIRED_PRODUCT_FIELDS = [
   'fuel_type',
   'vin_number',
 ];
+const MAX_PUBLIC_CATALOG_LIMIT = 60;
 
 function validateRequiredField(body, field, errors) {
   if (body[field] !== undefined) {
@@ -38,6 +39,34 @@ function validateRequiredField(body, field, errors) {
     field,
     message: `The ${field} is required.`,
   });
+}
+
+function parseOptionalInteger(value, field, errors, { min = Number.MIN_SAFE_INTEGER, max = Number.MAX_SAFE_INTEGER } = {}) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsedValue = Number(value);
+
+  if (!Number.isInteger(parsedValue)) {
+    errors.push({
+      code: `PRODUCT_${field.toUpperCase()}_INVALID`,
+      field,
+      message: `The ${field} must be an integer.`,
+    });
+    return undefined;
+  }
+
+  if (parsedValue < min || parsedValue > max) {
+    errors.push({
+      code: `PRODUCT_${field.toUpperCase()}_OUT_OF_RANGE`,
+      field,
+      message: `The ${field} must be between ${min} and ${max}.`,
+    });
+    return undefined;
+  }
+
+  return parsedValue;
 }
 
 function normalizeProductBody(body, errors) {
@@ -76,6 +105,78 @@ function validateCurrencyCode(body, field, errors) {
   if (!PRODUCT_CURRENCY_CODES.includes(normalizedValue)) {
     errors.push({ code: 'PRODUCT_CURRENCY_CODE_INVALID', field, message: 'The currency_code must be CLP or USD.' });
   }
+}
+
+function validatePublicCatalogQuery(req, res, next) {
+  const errors = [];
+  const filters = {
+    brand: typeof req.query.brand === 'string' ? req.query.brand.trim() : undefined,
+    model: typeof req.query.model === 'string' ? req.query.model.trim() : undefined,
+    currency_code: typeof req.query.currency_code === 'string'
+      ? req.query.currency_code.trim().toUpperCase()
+      : undefined,
+  };
+
+  if (filters.currency_code && !PRODUCT_CURRENCY_CODES.includes(filters.currency_code)) {
+    errors.push({
+      code: 'PRODUCT_CURRENCY_CODE_INVALID',
+      field: 'currency_code',
+      message: 'The currency_code must be CLP or USD.',
+    });
+  }
+
+  filters.year_from = parseOptionalInteger(req.query.year_from, 'year_from', errors, {
+    min: PRODUCT_YEAR_MIN,
+    max: getProductYearMax(),
+  });
+  filters.year_to = parseOptionalInteger(req.query.year_to, 'year_to', errors, {
+    min: PRODUCT_YEAR_MIN,
+    max: getProductYearMax(),
+  });
+  filters.price_min = parseOptionalInteger(req.query.price_min, 'price_min', errors, {
+    min: 0,
+  });
+  filters.price_max = parseOptionalInteger(req.query.price_max, 'price_max', errors, {
+    min: 0,
+  });
+  filters.limit = parseOptionalInteger(req.query.limit, 'limit', errors, {
+    min: 1,
+    max: MAX_PUBLIC_CATALOG_LIMIT,
+  }) ?? 24;
+
+  if (
+    filters.year_from !== undefined
+    && filters.year_to !== undefined
+    && filters.year_from > filters.year_to
+  ) {
+    errors.push({
+      code: 'PRODUCT_YEAR_RANGE_INVALID',
+      field: 'year_from',
+      message: 'year_from cannot be greater than year_to.',
+    });
+  }
+
+  if (
+    filters.price_min !== undefined
+    && filters.price_max !== undefined
+    && filters.price_min > filters.price_max
+  ) {
+    errors.push({
+      code: 'PRODUCT_PRICE_RANGE_INVALID',
+      field: 'price_min',
+      message: 'price_min cannot be greater than price_max.',
+    });
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({
+      status: 400,
+      errors,
+    });
+  }
+
+  req.catalogFilters = filters;
+  return next();
 }
 
 function validateProductPayload(body, errors, { requireAllFields = false } = {}) {
@@ -142,4 +243,9 @@ const validateProductId = createUuidParamValidator({
   responseShape: 'success',
 });
 
-export { validateCreateProduct, validateProductId, validateUpdateProduct };
+export {
+  validateCreateProduct,
+  validateProductId,
+  validatePublicCatalogQuery,
+  validateUpdateProduct,
+};

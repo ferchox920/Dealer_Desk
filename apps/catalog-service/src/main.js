@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import db from './config/db/db.js';
+import publicCatalogRoutes from './routes/public/public-catalog.routes.js';
 import productRoutes from './routes/products/product.routes.js';
 import productImageRoutes from './routes/product-images/product-image.routes.js';
 import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
@@ -52,6 +53,7 @@ catalogApp.get('/products/health', (_req, res) => {
   });
 });
 
+catalogApp.use(publicCatalogRoutes);
 catalogApp.use(productRoutes);
 catalogApp.use(productImageRoutes);
 

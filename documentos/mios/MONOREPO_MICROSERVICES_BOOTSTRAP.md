@@ -101,6 +101,7 @@ Por ahora hace:
 
 - healthchecks
 - expone `/products/*` y `/products/:id/images/*` desde un proceso separado
+- expone `/catalog/products` y `/catalog/products/:id` como superficie publica
 - usa DB, entities, services y validaciones locales dentro de `apps/catalog-service/src`
 - acepta auth reenviada por el gateway para proteger inventario sin volver a acoplar login
 - exige secreto interno del gateway para no confiar en headers de auth enviados por clientes externos

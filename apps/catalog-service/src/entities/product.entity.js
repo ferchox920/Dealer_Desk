@@ -40,6 +40,10 @@ const PRODUCT_SELECT = `
   created_at,
   updated_at
 `;
+const PUBLIC_PRODUCT_BASE_WHERE = `
+  publish_status = 'published'
+  AND sale_status = 'available'
+`;
 
 // Campos que se pueden modificar con update().
 // Si alguien intenta meter "id" o "created_at" en un update, se ignora.
@@ -164,6 +168,55 @@ function coverOnlyFromOptions(options = {}) {
   return firstInclude?.where?.is_cover === true;
 }
 
+function buildPublicFilters(options = {}) {
+  const clauses = [PUBLIC_PRODUCT_BASE_WHERE];
+  const values = [];
+
+  if (typeof options.brand === 'string' && options.brand.trim().length > 0) {
+    values.push(options.brand.trim().toLowerCase());
+    clauses.push(`LOWER(brand) = ${buildPlaceholder(values.length)}`);
+  }
+
+  if (typeof options.model === 'string' && options.model.trim().length > 0) {
+    values.push(`%${options.model.trim().toLowerCase()}%`);
+    clauses.push(`LOWER(model) LIKE ${buildPlaceholder(values.length)}`);
+  }
+
+  if (typeof options.currency_code === 'string' && options.currency_code.trim().length > 0) {
+    values.push(options.currency_code.trim().toUpperCase());
+    clauses.push(`currency_code = ${buildPlaceholder(values.length)}`);
+  }
+
+  if (typeof options.year_from === 'number') {
+    values.push(options.year_from);
+    clauses.push(`year >= ${buildPlaceholder(values.length)}`);
+  }
+
+  if (typeof options.year_to === 'number') {
+    values.push(options.year_to);
+    clauses.push(`year <= ${buildPlaceholder(values.length)}`);
+  }
+
+  if (typeof options.price_min === 'number') {
+    values.push(options.price_min);
+    clauses.push(`price >= ${buildPlaceholder(values.length)}`);
+  }
+
+  if (typeof options.price_max === 'number') {
+    values.push(options.price_max);
+    clauses.push(`price <= ${buildPlaceholder(values.length)}`);
+  }
+
+  const limit = typeof options.limit === 'number' ? options.limit : 24;
+  values.push(limit);
+
+  return {
+    clause: clauses.join(' AND '),
+    limitPlaceholder: buildPlaceholder(values.length),
+    values,
+  };
+}
+
 const Product = {
   // Crea un producto nuevo en la DB y devuelve el registro completo.
   //
@@ -253,6 +306,70 @@ const Product = {
         SELECT ${PRODUCT_SELECT}
         FROM products
         WHERE ${where.clause}
+        LIMIT 1
+      `,
+      where.values,
+    );
+
+    const product = hydrateProduct(rows[0]);
+
+    if (!product) {
+      return null;
+    }
+
+    if (!shouldIncludeImages(options)) {
+      return product;
+    }
+
+    product.images = await loadProductImages(id, coverOnlyFromOptions(options));
+    return product;
+  },
+
+  async findPublicCatalog(options = {}) {
+    const filters = buildPublicFilters(options);
+
+    const { rows } = await query(
+      `
+        SELECT ${PRODUCT_SELECT}
+        FROM products
+        WHERE ${filters.clause}
+        ORDER BY created_at DESC
+        LIMIT ${filters.limitPlaceholder}
+      `,
+      filters.values,
+    );
+
+    const products = rows.map((row) => {
+      const product = hydrateProduct(row);
+      product.images = [];
+      return product;
+    });
+
+    if (!shouldIncludeImages(options)) {
+      return products;
+    }
+
+    const imagesByProductId = await loadImagesByProductIds(
+      products.map((product) => product.id),
+      coverOnlyFromOptions(options),
+    );
+
+    for (const product of products) {
+      product.images = imagesByProductId.get(product.id) ?? [];
+    }
+
+    return products;
+  },
+
+  async findPublicByPk(id, options = {}) {
+    const where = buildWhereEqualsClause({ id });
+
+    const { rows } = await query(
+      `
+        SELECT ${PRODUCT_SELECT}
+        FROM products
+        WHERE ${where.clause}
+          AND ${PUBLIC_PRODUCT_BASE_WHERE}
         LIMIT 1
       `,
       where.values,

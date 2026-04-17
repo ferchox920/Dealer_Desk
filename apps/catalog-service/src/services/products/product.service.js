@@ -75,6 +75,34 @@ class ProductService {
     });
   }
 
+  async getPublicCatalog(filters = {}) {
+    return await Product.findPublicCatalog({
+      ...filters,
+      include: [{
+        model: ProductImage,
+        as: 'images',
+        where: { is_cover: true },
+        required: false,
+      }],
+    });
+  }
+
+  async getPublicById(id) {
+    const product = await Product.findPublicByPk(id, {
+      include: [{
+        model: ProductImage,
+        as: 'images',
+      }],
+      order: [[{ model: ProductImage, as: 'images' }, 'sort_order', 'ASC']],
+    });
+
+    if (!product) {
+      throw createHttpError(404, 'Public product not found.', 'PUBLIC_PRODUCT_NOT_FOUND');
+    }
+
+    return product;
+  }
+
   async getById(id) {
     const product = await Product.findByPk(id, {
       include: [{

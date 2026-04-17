@@ -38,6 +38,7 @@ const IDENTITY_PUBLIC_AUTH_PATHS = new Set([
   '/api/admin/users/health',
 ]);
 const CATALOG_PUBLIC_PATHS = new Set([
+  '/api/catalog/health',
   '/api/admin/products/health',
 ]);
 const PLATFORM_PUBLIC_PATHS = new Set([
@@ -163,6 +164,13 @@ gatewayApp.use(createProxyMiddleware({
   target: catalogServiceUrl,
   changeOrigin: true,
   pathRewrite: (path) => path.replace(/^\/api\/admin/, ''),
+}));
+
+gatewayApp.use(createProxyMiddleware({
+  pathFilter: (pathname) => pathname.startsWith('/api/catalog'),
+  target: catalogServiceUrl,
+  changeOrigin: true,
+  pathRewrite: (path) => path.replace(/^\/api/, ''),
 }));
 
 gatewayApp.use(createProxyMiddleware({
