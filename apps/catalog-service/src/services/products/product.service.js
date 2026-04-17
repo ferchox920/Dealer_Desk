@@ -7,6 +7,10 @@ import Product from '../../entities/product.entity.js';
 import ProductImage from '../../entities/product-image.entity.js';
 import db from '../../config/db/db.js';
 import { createHttpError } from '../../utils/errors/app-error.util.js';
+import {
+  serializePublicCatalogCard,
+  serializePublicCatalogDetail,
+} from '../../utils/serializers/public-product.serializer.js';
 import { destroyCloudinaryAssetsBestEffort } from '../../utils/cloudinary/destroy-cloudinary-assets.util.js';
 
 function buildPriceOutOfRangeMessage(currencyCode, range) {
@@ -87,7 +91,7 @@ class ProductService {
     });
 
     return {
-      items: result.items,
+      items: result.items.map((item) => serializePublicCatalogCard(item)),
       pagination: {
         page: filters.page ?? 1,
         limit: filters.limit ?? 24,
@@ -123,7 +127,7 @@ class ProductService {
       throw createHttpError(404, 'Public product not found.', 'PUBLIC_PRODUCT_NOT_FOUND');
     }
 
-    return product;
+    return serializePublicCatalogDetail(product);
   }
 
   async getPublicBrands() {
