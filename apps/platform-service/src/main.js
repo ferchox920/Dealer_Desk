@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import authRoutes from './routes/auth/auth.routes.js';
 import db from './config/db/db.js';
 import systemRoutes from './routes/systems/system.routes.js';
+import { requireInternalRequest } from './middlewares/http/require-internal-request.js';
 import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
 import {
   getAllowedOrigin,
@@ -32,6 +33,14 @@ platformApp.get('/health', (_req, res) => {
     service: 'platform-service',
     boundedContext: 'platform',
   });
+});
+
+platformApp.use((req, res, next) => {
+  if (req.path === '/health') {
+    return next();
+  }
+
+  return requireInternalRequest(req, res, next);
 });
 
 platformApp.get('/systems/health', (_req, res) => {

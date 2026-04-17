@@ -116,7 +116,7 @@ const System = {
     return hydrateSystem(rows[0]);
   },
 
-  async update(id, data) {
+  async update(id, data, executor = query) {
     const fields = MUTABLE_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(data, field));
 
     if (fields.length === 0) {
@@ -129,7 +129,7 @@ const System = {
     );
     const where = buildWhereEqualsClause({ id }, set.values.length + 1);
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         UPDATE systems
         SET ${set.clause}, updated_at = NOW()

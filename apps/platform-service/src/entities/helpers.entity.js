@@ -43,4 +43,8 @@ function buildUpdateSetClause(data, startIndex = 1) {
   };
 }
 
-export { attachRecordMethods, buildInsertParts, buildUpdateSetClause, buildWhereEqualsClause };
+function buildPlaceholder(index) {
+  return `$${index}`;
+}
+
+export { attachRecordMethods, buildInsertParts, buildPlaceholder, buildUpdateSetClause, buildWhereEqualsClause };

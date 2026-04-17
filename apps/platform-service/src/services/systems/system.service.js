@@ -7,6 +7,16 @@ class SystemService {
     return await System.findAll();
   }
 
+  async getById(id) {
+    const system = await System.findByPk(id);
+
+    if (!system) {
+      throw createHttpError(404, 'System not found.', 'SYSTEM_NOT_FOUND');
+    }
+
+    return system;
+  }
+
   async create(data) {
     const slug = normalizeSlug(data.slug);
 

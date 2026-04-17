@@ -2,9 +2,13 @@ import express from 'express';
 import { SUPER_ADMIN_ROLE } from '../../constants/platform-roles.js';
 import { authorizeRoles } from '../../middlewares/auth/authorize-roles.js';
 import { requireAuth } from '../../middlewares/auth/require-auth.js';
+import provisioningService from '../../services/provisioning/provisioning.service.js';
 import systemService from '../../services/systems/system.service.js';
 import {
   validateCreateSystem,
+  validateProvisioningRunId,
+  validateProvisionSystem,
+  validateSystemId,
 } from '../../utils/validations/systems/system.validation.js';
 
 const systemRoutes = express.Router();
@@ -33,6 +37,19 @@ systemRoutes.get('/systems', async (_req, res) => {
   }
 });
 
+systemRoutes.get('/systems/:id', validateSystemId, async (req, res) => {
+  try {
+    const system = await systemService.getById(req.params.id);
+
+    return res.status(200).json({
+      status: 200,
+      data: system,
+    });
+  } catch (error) {
+    return sendSystemError(res, error);
+  }
+});
+
 systemRoutes.post('/systems', validateCreateSystem, async (req, res) => {
   try {
     const system = await systemService.create(req.body);
@@ -40,6 +57,45 @@ systemRoutes.post('/systems', validateCreateSystem, async (req, res) => {
     return res.status(201).json({
       status: 201,
       data: system,
+    });
+  } catch (error) {
+    return sendSystemError(res, error);
+  }
+});
+
+systemRoutes.post('/systems/:id/provision', validateSystemId, validateProvisionSystem, async (req, res) => {
+  try {
+    const provisioningRun = await provisioningService.createProvisioningRun(req.params.id, req.body);
+
+    return res.status(201).json({
+      status: 201,
+      data: provisioningRun,
+    });
+  } catch (error) {
+    return sendSystemError(res, error);
+  }
+});
+
+systemRoutes.get('/systems/:id/provisioning-runs', validateSystemId, async (req, res) => {
+  try {
+    const provisioningRuns = await provisioningService.getProvisioningRuns(req.params.id);
+
+    return res.status(200).json({
+      status: 200,
+      data: provisioningRuns,
+    });
+  } catch (error) {
+    return sendSystemError(res, error);
+  }
+});
+
+systemRoutes.get('/systems/:id/provisioning-runs/:runId', validateSystemId, validateProvisioningRunId, async (req, res) => {
+  try {
+    const provisioningRun = await provisioningService.getProvisioningRunById(req.params.id, req.params.runId);
+
+    return res.status(200).json({
+      status: 200,
+      data: provisioningRun,
     });
   } catch (error) {
     return sendSystemError(res, error);

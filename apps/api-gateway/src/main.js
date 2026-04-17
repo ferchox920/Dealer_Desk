@@ -15,6 +15,7 @@ import {
   getCatalogServiceUrl,
   getGatewayPort,
   getIdentityServiceUrl,
+  getPlatformServiceUrl,
 } from '@dealer-desk/shared-config';
 import {
   sendErrorResponse,
@@ -25,6 +26,7 @@ const gatewayApp = express();
 const PORT = getGatewayPort();
 const identityServiceUrl = getIdentityServiceUrl();
 const catalogServiceUrl = getCatalogServiceUrl();
+const platformServiceUrl = getPlatformServiceUrl();
 const IDENTITY_PUBLIC_AUTH_PATHS = new Set([
   '/api/admin/auth/health',
   '/api/admin/auth/login',
@@ -37,6 +39,12 @@ const IDENTITY_PUBLIC_AUTH_PATHS = new Set([
 ]);
 const CATALOG_PUBLIC_PATHS = new Set([
   '/api/admin/products/health',
+]);
+const PLATFORM_PUBLIC_PATHS = new Set([
+  '/api/platform/auth/login',
+  '/api/platform/auth/refresh',
+  '/api/platform/auth/logout',
+  '/api/platform/systems/health',
 ]);
 
 function isProtectedIdentityRoute(pathname) {
@@ -63,6 +71,10 @@ function isProtectedCatalogRoute(pathname) {
   return pathname.startsWith('/api/admin/products');
 }
 
+function isPlatformRoute(pathname) {
+  return pathname.startsWith('/api/platform');
+}
+
 gatewayApp.disable('x-powered-by');
 gatewayApp.use(cors({
   origin: getAllowedOrigin(),
@@ -76,6 +88,7 @@ gatewayApp.get('/health', (_req, res) => {
     upstreams: {
       catalog: catalogServiceUrl,
       identity: identityServiceUrl,
+      platform: platformServiceUrl,
     },
   });
 });
@@ -83,11 +96,12 @@ gatewayApp.get('/health', (_req, res) => {
 gatewayApp.use((req, res, next) => {
   const accessToken = getBearerTokenFromAuthorizationHeader(req.headers.authorization);
   const pathname = req.originalUrl.split('?')[0];
+  const isPlatformRequest = isPlatformRoute(pathname);
   const routeRequiresAuth = isProtectedIdentityRoute(pathname)
     || isProtectedCatalogRoute(pathname);
   let accessTokenPayload = null;
 
-  if (accessToken) {
+  if (accessToken && !isPlatformRequest) {
     try {
       accessTokenPayload = verifyAccessToken(accessToken);
     } catch (_error) {
@@ -149,6 +163,13 @@ gatewayApp.use(createProxyMiddleware({
   target: catalogServiceUrl,
   changeOrigin: true,
   pathRewrite: (path) => path.replace(/^\/api\/admin/, ''),
+}));
+
+gatewayApp.use(createProxyMiddleware({
+  pathFilter: (pathname) => pathname.startsWith('/api/platform'),
+  target: platformServiceUrl,
+  changeOrigin: true,
+  pathRewrite: (path) => path.replace(/^\/api\/platform/, ''),
 }));
 
 gatewayApp.use((_req, res) => {
