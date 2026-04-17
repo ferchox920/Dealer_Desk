@@ -76,7 +76,7 @@ class ProductService {
   }
 
   async getPublicCatalog(filters = {}) {
-    return await Product.findPublicCatalog({
+    const result = await Product.findPublicCatalog({
       ...filters,
       include: [{
         model: ProductImage,
@@ -85,6 +85,29 @@ class ProductService {
         required: false,
       }],
     });
+
+    return {
+      items: result.items,
+      pagination: {
+        page: filters.page ?? 1,
+        limit: filters.limit ?? 24,
+        total: result.total,
+        total_pages: Math.max(1, Math.ceil(result.total / (filters.limit ?? 24))),
+      },
+      sort: {
+        by: filters.sort_by ?? 'created_at',
+        direction: filters.sort_direction ?? 'desc',
+      },
+      filters: {
+        brand: filters.brand ?? null,
+        model: filters.model ?? null,
+        currency_code: filters.currency_code ?? null,
+        year_from: filters.year_from ?? null,
+        year_to: filters.year_to ?? null,
+        price_min: filters.price_min ?? null,
+        price_max: filters.price_max ?? null,
+      },
+    };
   }
 
   async getPublicById(id) {
@@ -101,6 +124,14 @@ class ProductService {
     }
 
     return product;
+  }
+
+  async getPublicBrands() {
+    return await Product.findPublicBrands();
+  }
+
+  async getPublicModels(brand) {
+    return await Product.findPublicModelsByBrand(brand);
   }
 
   async getById(id) {

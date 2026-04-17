@@ -208,11 +208,25 @@ function buildPublicFilters(options = {}) {
   }
 
   const limit = typeof options.limit === 'number' ? options.limit : 24;
+  const page = typeof options.page === 'number' ? options.page : 1;
+  const offset = (page - 1) * limit;
+  const sortBy = options.sort_by === 'price'
+    ? 'price'
+    : options.sort_by === 'year'
+      ? 'year'
+      : 'created_at';
+  const sortDirection = options.sort_direction === 'asc' ? 'ASC' : 'DESC';
+
   values.push(limit);
+  const limitPlaceholder = buildPlaceholder(values.length);
+  values.push(offset);
+  const offsetPlaceholder = buildPlaceholder(values.length);
 
   return {
     clause: clauses.join(' AND '),
-    limitPlaceholder: buildPlaceholder(values.length),
+    limitPlaceholder,
+    offsetPlaceholder,
+    orderClause: `ORDER BY ${sortBy} ${sortDirection}, created_at DESC`,
     values,
   };
 }
@@ -327,14 +341,23 @@ const Product = {
 
   async findPublicCatalog(options = {}) {
     const filters = buildPublicFilters(options);
+    const { rows: countRows } = await query(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM products
+        WHERE ${filters.clause}
+      `,
+      filters.values.slice(0, -2),
+    );
 
     const { rows } = await query(
       `
         SELECT ${PRODUCT_SELECT}
         FROM products
         WHERE ${filters.clause}
-        ORDER BY created_at DESC
+        ${filters.orderClause}
         LIMIT ${filters.limitPlaceholder}
+        OFFSET ${filters.offsetPlaceholder}
       `,
       filters.values,
     );
@@ -358,7 +381,10 @@ const Product = {
       product.images = imagesByProductId.get(product.id) ?? [];
     }
 
-    return products;
+    return {
+      items: products,
+      total: countRows[0]?.total ?? 0,
+    };
   },
 
   async findPublicByPk(id, options = {}) {
@@ -387,6 +413,43 @@ const Product = {
 
     product.images = await loadProductImages(id, coverOnlyFromOptions(options));
     return product;
+  },
+
+  async findPublicBrands() {
+    const { rows } = await query(
+      `
+        SELECT brand, COUNT(*)::int AS total
+        FROM products
+        WHERE ${PUBLIC_PRODUCT_BASE_WHERE}
+        GROUP BY brand
+        ORDER BY brand ASC
+      `,
+    );
+
+    return rows;
+  },
+
+  async findPublicModelsByBrand(brand) {
+    const values = [];
+    const clauses = [PUBLIC_PRODUCT_BASE_WHERE];
+
+    if (typeof brand === 'string' && brand.trim().length > 0) {
+      values.push(brand.trim().toLowerCase());
+      clauses.push(`LOWER(brand) = ${buildPlaceholder(values.length)}`);
+    }
+
+    const { rows } = await query(
+      `
+        SELECT model, COUNT(*)::int AS total
+        FROM products
+        WHERE ${clauses.join(' AND ')}
+        GROUP BY model
+        ORDER BY model ASC
+      `,
+      values,
+    );
+
+    return rows;
   },
 
   // Actualiza solo los campos permitidos (MUTABLE_FIELDS) de un producto.

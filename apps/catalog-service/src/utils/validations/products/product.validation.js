@@ -28,6 +28,8 @@ const REQUIRED_PRODUCT_FIELDS = [
   'vin_number',
 ];
 const MAX_PUBLIC_CATALOG_LIMIT = 60;
+const ALLOWED_PUBLIC_CATALOG_SORT_FIELDS = ['created_at', 'price', 'year'];
+const ALLOWED_PUBLIC_CATALOG_SORT_DIRECTIONS = ['asc', 'desc'];
 
 function validateRequiredField(body, field, errors) {
   if (body[field] !== undefined) {
@@ -143,6 +145,31 @@ function validatePublicCatalogQuery(req, res, next) {
     min: 1,
     max: MAX_PUBLIC_CATALOG_LIMIT,
   }) ?? 24;
+  filters.page = parseOptionalInteger(req.query.page, 'page', errors, {
+    min: 1,
+  }) ?? 1;
+  filters.sort_by = typeof req.query.sort_by === 'string'
+    ? req.query.sort_by.trim().toLowerCase()
+    : 'created_at';
+  filters.sort_direction = typeof req.query.sort_direction === 'string'
+    ? req.query.sort_direction.trim().toLowerCase()
+    : 'desc';
+
+  if (!ALLOWED_PUBLIC_CATALOG_SORT_FIELDS.includes(filters.sort_by)) {
+    errors.push({
+      code: 'PRODUCT_SORT_BY_INVALID',
+      field: 'sort_by',
+      message: `sort_by must be one of: ${ALLOWED_PUBLIC_CATALOG_SORT_FIELDS.join(', ')}.`,
+    });
+  }
+
+  if (!ALLOWED_PUBLIC_CATALOG_SORT_DIRECTIONS.includes(filters.sort_direction)) {
+    errors.push({
+      code: 'PRODUCT_SORT_DIRECTION_INVALID',
+      field: 'sort_direction',
+      message: `sort_direction must be one of: ${ALLOWED_PUBLIC_CATALOG_SORT_DIRECTIONS.join(', ')}.`,
+    });
+  }
 
   if (
     filters.year_from !== undefined

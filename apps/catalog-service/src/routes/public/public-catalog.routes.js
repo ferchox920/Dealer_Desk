@@ -37,6 +37,32 @@ publicCatalogRoutes.get('/catalog/products', validatePublicCatalogQuery, async (
   }
 });
 
+publicCatalogRoutes.get('/catalog/filters/brands', async (_req, res) => {
+  try {
+    const brands = await productService.getPublicBrands();
+
+    return res.status(200).json({
+      status: 200,
+      data: brands,
+    });
+  } catch (error) {
+    return sendPublicCatalogError(res, error);
+  }
+});
+
+publicCatalogRoutes.get('/catalog/filters/models', async (req, res) => {
+  try {
+    const models = await productService.getPublicModels(req.query.brand);
+
+    return res.status(200).json({
+      status: 200,
+      data: models,
+    });
+  } catch (error) {
+    return sendPublicCatalogError(res, error);
+  }
+});
+
 publicCatalogRoutes.get('/catalog/products/:id', validateProductId, async (req, res) => {
   try {
     const product = await productService.getPublicById(req.params.id);
