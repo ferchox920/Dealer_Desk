@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "node --watch src/main.js",
     "monolith:dev": "node --watch src/main.js",
-    "seed:owner": "node src/scripts/seed-owner.js",
+    "seed:owner": "npm run seed:owner --workspace @dealer-desk/identity-service",
     "gateway:dev": "npm run dev --workspace @dealer-desk/api-gateway",
     "identity:dev": "npm run dev --workspace @dealer-desk/identity-service",
     "catalog:dev": "npm run dev --workspace @dealer-desk/catalog-service",

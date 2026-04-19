@@ -6,7 +6,8 @@
   "main": "src/main.js",
   "scripts": {
     "dev": "node --watch src/main.js",
-    "start": "node src/main.js"
+    "start": "node src/main.js",
+    "seed:owner": "node src/scripts/seed-owner.js"
   },
   "dependencies": {
     "@dealer-desk/shared-auth": "1.0.0",
