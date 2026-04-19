@@ -169,6 +169,7 @@ Regla practica actual:
 
 - `npm run dev` levanta `gateway`, `identity-service`, `catalog-service` y `platform-service`
 - `npm run monolith:dev` queda solo para comparaciones legacy y requiere opt-in explicito
+- aun con el monolito encendido, `/api/admin/*` queda deshabilitado salvo que definas `ENABLE_LEGACY_MONOLITH_ROUTES=true`
 
 Si solo quieres validar frontera HTTP sin una DB local lista:
 

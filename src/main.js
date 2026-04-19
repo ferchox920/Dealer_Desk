@@ -21,6 +21,7 @@ import productRoutes from './routes/admin/products/product.routes.js';
 import productImageRoutes from './routes/admin/product-images/product-image.routes.js';
 
 const expressApp = express();
+const areLegacyAdminRoutesEnabled = process.env.ENABLE_LEGACY_MONOLITH_ROUTES === 'true';
 
 expressApp.disable('x-powered-by');
 // credentials:true es importante para que el navegador acepte enviar/recibir
@@ -36,10 +37,22 @@ expressApp.use(trimRequestStrings);
 expressApp.use(morgan('dev'));
 
 expressApp.use('/api', pruebaRoutes);
-expressApp.use('/api/admin/auth', authRoutes);
-expressApp.use('/api/admin/users', userRoutes);
-expressApp.use('/api/admin', productRoutes);
-expressApp.use('/api/admin', productImageRoutes);
+
+if (areLegacyAdminRoutesEnabled) {
+  console.warn('Legacy monolith admin routes are enabled.');
+  expressApp.use('/api/admin/auth', authRoutes);
+  expressApp.use('/api/admin/users', userRoutes);
+  expressApp.use('/api/admin', productRoutes);
+  expressApp.use('/api/admin', productImageRoutes);
+} else {
+  expressApp.use('/api/admin', (_req, res) => {
+    return res.status(410).json({
+      status: 410,
+      error: 'Legacy monolith admin routes are disabled. Use the microservices stack through the gateway instead.',
+      code: 'LEGACY_MONOLITH_ROUTES_DISABLED',
+    });
+  });
+}
 
 const PORT = process.env.PORT || 3000;
 
@@ -62,6 +75,7 @@ async function startServer() {
 
     expressApp.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      console.log(`Legacy monolith admin routes ${areLegacyAdminRoutesEnabled ? 'enabled' : 'disabled'}.`);
     });
   } catch (error) {
     console.error('Error al iniciar el servidor:', error.message);
