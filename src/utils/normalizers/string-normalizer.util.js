@@ -1,11 +1,3 @@
-// ============================================================================
-// string-normalizer.util.js
-//
-// Helpers para "limpiar" strings antes de validarlos o guardarlos.
-// En este proyecto decidimos recortar espacios al inicio y al final porque
-// es un error humano muy común: " 123yy " cuando en realidad querías "123yy".
-// ============================================================================
-
 function trimBoundaryWhitespace(value) {
   if (typeof value !== 'string') {
     return value;

@@ -32,7 +32,7 @@ src/
 Por ahora hay dos mundos:
 
 1. `src/`
-   Aqui vive el backend legacy congelado.
+   Aqui vive el backend legacy reducido al minimo.
 
 2. `apps/`
    Aqui vive la arquitectura operativa actual.
@@ -42,6 +42,7 @@ Regla importante:
 - no reactivar el monolito como camino por defecto
 - cualquier cambio nuevo debe caer primero en `apps/` o `packages/`
 - `src/` solo se toca cuando hace falta cerrar la migracion o preservar compatibilidad temporal
+- el arbol `src/` ya no conserva auth/users/products/images como superficie operativa ni como implementacion activa
 
 ## Responsabilidad de cada app nueva
 
