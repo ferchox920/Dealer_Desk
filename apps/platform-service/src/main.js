@@ -18,6 +18,9 @@ import {
 
 const platformApp = express();
 const PORT = getPlatformServicePort();
+const platformSyncMode = (process.env.PLATFORM_DB_SYNC_MODE || process.env.DB_SYNC_MODE || 'safe')
+  .trim()
+  .toLowerCase();
 
 platformApp.disable('x-powered-by');
 platformApp.use(cors({
@@ -74,8 +77,9 @@ platformApp.use((error, _req, res, _next) => {
 async function startPlatformService() {
   try {
     await db.authenticate();
-    await db.sync();
+    await db.sync({ force: platformSyncMode === 'force' });
     console.log('Platform service database connection established.');
+    console.log(`Platform service schema sync completed in ${platformSyncMode} mode.`);
 
     platformApp.listen(PORT, () => {
       console.log(`Platform service running on port ${PORT}`);

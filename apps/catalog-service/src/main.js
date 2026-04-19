@@ -19,6 +19,9 @@ import {
 
 const catalogApp = express();
 const PORT = getCatalogServicePort();
+const catalogSyncMode = (process.env.CATALOG_DB_SYNC_MODE || process.env.DB_SYNC_MODE || 'safe')
+  .trim()
+  .toLowerCase();
 
 catalogApp.disable('x-powered-by');
 catalogApp.use(cors({
@@ -76,7 +79,9 @@ catalogApp.use((error, _req, res, _next) => {
 async function startCatalogService() {
   try {
     await db.authenticate();
+    await db.sync({ force: catalogSyncMode === 'force' });
     console.log('Catalog service database connection established.');
+    console.log(`Catalog service schema sync completed in ${catalogSyncMode} mode.`);
 
     catalogApp.listen(PORT, () => {
       console.log(`Catalog service running on port ${PORT}`);

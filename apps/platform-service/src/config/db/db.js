@@ -135,11 +135,23 @@ async function ensureTables(client) {
   await client.query('CREATE INDEX IF NOT EXISTS idx_system_provisioning_runs_system_id ON system_provisioning_runs(system_id)');
 }
 
-async function sync() {
+async function dropSchema(client) {
+  await client.query('DROP TABLE IF EXISTS system_provisioning_runs');
+  await client.query('DROP TABLE IF EXISTS platform_refresh_sessions');
+  await client.query('DROP TABLE IF EXISTS systems');
+  await client.query('DROP TABLE IF EXISTS platform_admins');
+}
+
+async function sync(options = {}) {
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
+
+    if (options.force) {
+      await dropSchema(client);
+    }
+
     await ensureTables(client);
     await client.query('COMMIT');
   } catch (error) {

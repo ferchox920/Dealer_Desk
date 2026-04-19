@@ -23,6 +23,9 @@ import {
 const identityApp = express();
 const PORT = getIdentityServicePort();
 const skipDatabaseConnect = process.env.IDENTITY_SKIP_DB_CONNECT === 'true';
+const identitySyncMode = (process.env.IDENTITY_DB_SYNC_MODE || process.env.DB_SYNC_MODE || 'safe')
+  .trim()
+  .toLowerCase();
 
 identityApp.disable('x-powered-by');
 identityApp.use(cors({
@@ -104,7 +107,9 @@ async function startIdentityService() {
       console.warn('Identity service started without database connection because IDENTITY_SKIP_DB_CONNECT=true.');
     } else {
       await db.authenticate();
+      await db.sync({ force: identitySyncMode === 'force' });
       console.log('Identity service database connection established.');
+      console.log(`Identity service schema sync completed in ${identitySyncMode} mode.`);
     }
 
     identityApp.listen(PORT, () => {
