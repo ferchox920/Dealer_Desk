@@ -2,15 +2,14 @@
 
 ## Objetivo de esta etapa
 
-Esta base no reemplaza todavia al backend actual.
+Esta base ya paso la fase de bootstrap.
 
-La intencion es:
+La intencion ahora es:
 
-- mantener el monolito operativo actual en la raiz
-- abrir una zona nueva para evolucion a microservicios
-- empezar por `api-gateway` e `identity-service`
-- abrir despues `catalog-service` para productos e imagenes
-- mover codigo por etapas, no de golpe
+- usar microservicios como camino operativo normal
+- dejar el monolito de raiz congelado como referencia legacy temporal
+- mantener la migracion controlada, sin borrar contexto util demasiado pronto
+- seguir apagando dependencias del arbol `src/` paso a paso
 
 ## Estructura creada
 
@@ -33,16 +32,16 @@ src/
 Por ahora hay dos mundos:
 
 1. `src/`
-   Aqui sigue viviendo el backend real actual.
+   Aqui vive el backend legacy congelado.
 
 2. `apps/`
-   Aqui empieza la arquitectura nueva.
+   Aqui vive la arquitectura operativa actual.
 
 Regla importante:
 
-- no mover logica productiva al azar
-- primero crear la frontera
-- despues copiar o extraer modulo por modulo
+- no reactivar el monolito como camino por defecto
+- cualquier cambio nuevo debe caer primero en `apps/` o `packages/`
+- `src/` solo se toca cuando hace falta cerrar la migracion o preservar compatibilidad temporal
 
 ## Responsabilidad de cada app nueva
 
@@ -159,11 +158,17 @@ Helpers chicos para:
 
 Desde la raiz:
 
-- `npm run monolith:dev`
+- `npm run dev`
+- `npm run monolith:dev` con `ENABLE_LEGACY_MONOLITH=true`
 - `npm run gateway:dev`
 - `npm run identity:dev`
 - `npm run catalog:dev`
 - `npm run platform:dev`
+
+Regla practica actual:
+
+- `npm run dev` levanta `gateway`, `identity-service`, `catalog-service` y `platform-service`
+- `npm run monolith:dev` queda solo para comparaciones legacy y requiere opt-in explicito
 
 Si solo quieres validar frontera HTTP sin una DB local lista:
 
@@ -179,13 +184,11 @@ No sirve para validar login real ni lectura/escritura contra PostgreSQL.
 
 ## Orden sugerido de migracion
 
-1. mantener el backend actual funcionando en `src/`
-2. mover primero superficie HTTP de auth/users a `identity-service`
-3. mover middlewares y utils compartidos que realmente valgan la pena a `packages/`
-4. cuando identity quede claro, abrir `catalog-service`
-5. estabilizar auth interna entre gateway y catalogo
-6. abrir `platform-service` para la capa central SaaS
-7. recien despues decidir si conviene separar repos
+1. congelar `src/` como backend legacy
+2. mantener `gateway + identity + catalog + platform` como stack operativo
+3. mover seeds y bootstrap operativo fuera del monolito
+4. retirar rutas legacy cuando ya no aporten verificacion
+5. recien despues decidir si conviene borrar por completo el arbol viejo o separarlo
 
 ## Decision de arquitectura de esta etapa
 

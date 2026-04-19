@@ -9,8 +9,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "node --watch src/main.js",
-    "monolith:dev": "node --watch src/main.js",
+    "dev": "node scripts/dev-microservices.js",
+    "monolith:dev": "node scripts/dev-monolith.js",
     "seed:owner": "npm run seed:owner --workspace @dealer-desk/identity-service",
     "gateway:dev": "npm run dev --workspace @dealer-desk/api-gateway",
     "identity:dev": "npm run dev --workspace @dealer-desk/identity-service",
