@@ -15,10 +15,6 @@ import morgan from 'morgan';
 import db from './config/db/db.js';
 import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
 import pruebaRoutes from './routes/prueba.routes.js';
-import authRoutes from './routes/admin/auth/auth.routes.js';
-import userRoutes from './routes/admin/users/user.routes.js';
-import productRoutes from './routes/admin/products/product.routes.js';
-import productImageRoutes from './routes/admin/product-images/product-image.routes.js';
 
 const expressApp = express();
 const areLegacyAdminRoutesEnabled = process.env.ENABLE_LEGACY_MONOLITH_ROUTES === 'true';
@@ -38,13 +34,9 @@ expressApp.use(morgan('dev'));
 
 expressApp.use('/api', pruebaRoutes);
 
-if (areLegacyAdminRoutesEnabled) {
-  console.warn('Legacy monolith admin routes are enabled.');
-  expressApp.use('/api/admin/auth', authRoutes);
-  expressApp.use('/api/admin/users', userRoutes);
-  expressApp.use('/api/admin', productRoutes);
-  expressApp.use('/api/admin', productImageRoutes);
-} else {
+const PORT = process.env.PORT || 3000;
+
+function mountDisabledLegacyAdminRoutes() {
   expressApp.use('/api/admin', (_req, res) => {
     return res.status(410).json({
       status: 410,
@@ -54,7 +46,31 @@ if (areLegacyAdminRoutesEnabled) {
   });
 }
 
-const PORT = process.env.PORT || 3000;
+async function mountLegacyAdminRoutes() {
+  if (!areLegacyAdminRoutesEnabled) {
+    mountDisabledLegacyAdminRoutes();
+    return;
+  }
+
+  console.warn('Legacy monolith admin routes are enabled.');
+
+  const [
+    { default: authRoutes },
+    { default: userRoutes },
+    { default: productRoutes },
+    { default: productImageRoutes },
+  ] = await Promise.all([
+    import('./routes/admin/auth/auth.routes.js'),
+    import('./routes/admin/users/user.routes.js'),
+    import('./routes/admin/products/product.routes.js'),
+    import('./routes/admin/product-images/product-image.routes.js'),
+  ]);
+
+  expressApp.use('/api/admin/auth', authRoutes);
+  expressApp.use('/api/admin/users', userRoutes);
+  expressApp.use('/api/admin', productRoutes);
+  expressApp.use('/api/admin', productImageRoutes);
+}
 
 async function startServer() {
   try {
@@ -72,6 +88,8 @@ async function startServer() {
       await db.sync();
       console.log('DB sync SAFE completado.');
     }
+
+    await mountLegacyAdminRoutes();
 
     expressApp.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
