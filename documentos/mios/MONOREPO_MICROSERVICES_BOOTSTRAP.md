@@ -7,9 +7,8 @@ Esta base ya paso la fase de bootstrap.
 La intencion ahora es:
 
 - usar microservicios como camino operativo normal
-- dejar el monolito de raiz congelado como referencia legacy temporal
-- mantener la migracion controlada, sin borrar contexto util demasiado pronto
-- seguir apagando dependencias del arbol `src/` paso a paso
+- retirar por completo el monolito de raiz de esta branch
+- mantener la migracion controlada sin reintroducir superficies duplicadas
 
 ## Estructura creada
 
@@ -23,26 +22,19 @@ packages/
   shared-auth/
   shared-config/
   shared-http/
-src/
-  ... monolito actual ...
 ```
 
 ## Criterio de convivencia
 
-Por ahora hay dos mundos:
+La arquitectura operativa actual vive en:
 
-1. `src/`
-   Aqui vive el backend legacy reducido al minimo.
-
-2. `apps/`
-   Aqui vive la arquitectura operativa actual.
+1. `apps/`
+   Aqui viven `gateway`, `identity-service`, `catalog-service` y `platform-service`.
 
 Regla importante:
 
-- no reactivar el monolito como camino por defecto
 - cualquier cambio nuevo debe caer primero en `apps/` o `packages/`
-- `src/` solo se toca cuando hace falta cerrar la migracion o preservar compatibilidad temporal
-- el arbol `src/` ya no conserva auth/users/products/images como superficie operativa ni como implementacion activa
+- no reintroducir un monolito paralelo en esta branch
 
 ## Responsabilidad de cada app nueva
 
@@ -160,7 +152,6 @@ Helpers chicos para:
 Desde la raiz:
 
 - `npm run dev`
-- `npm run monolith:dev` con `ENABLE_LEGACY_MONOLITH=true`
 - `npm run gateway:dev`
 - `npm run identity:dev`
 - `npm run catalog:dev`
@@ -169,8 +160,7 @@ Desde la raiz:
 Regla practica actual:
 
 - `npm run dev` levanta `gateway`, `identity-service`, `catalog-service` y `platform-service`
-- `npm run monolith:dev` queda solo para comparaciones legacy y requiere opt-in explicito
-- aun con el monolito encendido, `/api/admin/*` ya no existe como superficie legacy operativa y responde `410`
+- `npm run monolith:dev` ahora solo informa que el monolito fue retirado de esta branch
 
 Si solo quieres validar frontera HTTP sin una DB local lista:
 
@@ -184,13 +174,11 @@ Eso sirve para probar:
 
 No sirve para validar login real ni lectura/escritura contra PostgreSQL.
 
-## Orden sugerido de migracion
+## Estado actual
 
-1. congelar `src/` como backend legacy
-2. mantener `gateway + identity + catalog + platform` como stack operativo
-3. mover seeds y bootstrap operativo fuera del monolito
-4. retirar rutas legacy cuando ya no aporten verificacion
-5. recien despues decidir si conviene borrar por completo el arbol viejo o separarlo
+1. `gateway + identity + catalog + platform` son la unica superficie operativa de esta branch
+2. los seeds y el bootstrap real ya viven fuera del monolito
+3. el arbol `src/` fue retirado para eliminar la doble fuente de verdad
 
 ## Decision de arquitectura de esta etapa
 
