@@ -7,6 +7,10 @@
   "scripts": {
     "dev": "node --watch src/main.js",
     "start": "node src/main.js",
+    "migrate:create": "node src/scripts/migrations/identity.cli.js create",
+    "migrate:up": "node src/scripts/migrations/identity.cli.js up",
+    "migrate:down": "node src/scripts/migrations/identity.cli.js down",
+    "migrate:status": "node src/scripts/migrations/identity.cli.js status",
     "seed:owner": "node src/scripts/seed-owner.js"
   },
   "dependencies": {

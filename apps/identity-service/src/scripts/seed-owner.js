@@ -3,6 +3,7 @@ import db from '../config/db/db.js';
 import { OWNER_ROLE } from '../constants/admin-roles.js';
 import Admin from '../entities/admin.entity.js';
 import passwordActionService from '../services/auth/password-action.service.js';
+import { ensureIdentityDatabaseReady } from '../utils/db/migration-runtime.util.js';
 import {
   getPasswordPolicyError,
   hashPassword,
@@ -21,7 +22,7 @@ function normalizeEnvString(value, fallback = '') {
 
 async function run() {
   await db.authenticate();
-  await db.sync();
+  await ensureIdentityDatabaseReady();
 
   const ownerEmail = (
     normalizeEnvString(process.env.SEED_OWNER_EMAIL, DEFAULT_OWNER_EMAIL) || DEFAULT_OWNER_EMAIL

@@ -1,13 +1,12 @@
-import { v4 as uuidv4 } from 'uuid';
 import db from '../../config/db/db.js';
 import Admin from '../../entities/admin.entity.js';
+import RefreshSession from '../../entities/refresh-session.entity.js';
 import { createHttpError } from '../../utils/errors/app-error.util.js';
 import { trimBoundaryWhitespace } from '../../utils/normalizers/string-normalizer.util.js';
 import { serializeAdmin } from '../../utils/serializers/admin.serializer.js';
 import { verifyPassword } from '../../utils/security/password.util.js';
 import {
   generateOpaqueRefreshToken,
-  sha256,
   signAccessToken,
 } from '../../utils/security/token.util.js';
 
@@ -26,53 +25,13 @@ function buildRefreshTokenExpiryDate() {
 }
 
 async function createRefreshSession(client, { adminId, refreshToken, userAgent, ipAddress, expiresAt }) {
-  const tokenHash = sha256(refreshToken);
-
-  await client.query(
-    `
-      INSERT INTO refresh_sessions (
-        id, admin_id, token_hash, user_agent, ip_address, expires_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `,
-    [
-      uuidv4(),
-      adminId,
-      tokenHash,
-      userAgent ?? null,
-      ipAddress ?? null,
-      expiresAt,
-    ],
-  );
-}
-
-async function findRefreshSessionForUpdate(client, refreshToken) {
-  const tokenHash = sha256(refreshToken);
-
-  const { rows } = await client.query(
-    `
-      SELECT id, admin_id, token_hash, expires_at, revoked_at
-      FROM refresh_sessions
-      WHERE token_hash = $1
-      LIMIT 1
-      FOR UPDATE
-    `,
-    [tokenHash],
-  );
-
-  return rows[0] ?? null;
-}
-
-async function revokeRefreshSession(client, sessionId) {
-  await client.query(
-    `
-      UPDATE refresh_sessions
-      SET revoked_at = COALESCE(revoked_at, NOW()),
-          last_used_at = NOW()
-      WHERE id = $1
-    `,
-    [sessionId],
-  );
+  await RefreshSession.create({
+    admin_id: adminId,
+    refresh_token: refreshToken,
+    user_agent: userAgent,
+    ip_address: ipAddress,
+    expires_at: expiresAt,
+  }, client.query.bind(client));
 }
 
 class AuthService {
@@ -129,7 +88,10 @@ class AuthService {
     }
 
     return await db.withTransaction(async (client) => {
-      const session = await findRefreshSessionForUpdate(client, refreshToken);
+      const session = await RefreshSession.findByPlainTokenForUpdate(
+        refreshToken,
+        client.query.bind(client),
+      );
 
       if (!session) {
         throw createHttpError(401, 'Invalid refresh token.', 'REFRESH_TOKEN_INVALID');
@@ -152,7 +114,7 @@ class AuthService {
       const newRefreshToken = generateOpaqueRefreshToken();
       const newExpiresAt = buildRefreshTokenExpiryDate();
 
-      await revokeRefreshSession(client, session.id);
+      await RefreshSession.revokeById(session.id, client.query.bind(client));
       await createRefreshSession(client, {
         adminId: admin.id,
         refreshToken: newRefreshToken,
@@ -174,15 +136,7 @@ class AuthService {
       return;
     }
 
-    await db.query(
-      `
-        UPDATE refresh_sessions
-        SET revoked_at = COALESCE(revoked_at, NOW()),
-            last_used_at = NOW()
-        WHERE token_hash = $1
-      `,
-      [sha256(refreshToken)],
-    );
+    await RefreshSession.revokeByPlainToken(refreshToken);
   }
 
   async getCurrentAdmin(adminId) {

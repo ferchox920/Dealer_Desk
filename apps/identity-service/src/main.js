@@ -3,10 +3,12 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import authRoutes from './routes/auth/auth.routes.js';
+import planRoutes from './routes/plans/plan.routes.js';
 import userRoutes from './routes/users/user.routes.js';
 import db from './config/db/db.js';
 import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
 import { requireInternalRequest } from './middlewares/http/require-internal-request.js';
+import { ensureIdentityDatabaseReady } from './utils/db/migration-runtime.util.js';
 import {
   AUTH_CONTEXT_HEADER_MAP,
   getBearerTokenFromAuthorizationHeader,
@@ -23,9 +25,6 @@ import {
 const identityApp = express();
 const PORT = getIdentityServicePort();
 const skipDatabaseConnect = process.env.IDENTITY_SKIP_DB_CONNECT === 'true';
-const identitySyncMode = (process.env.IDENTITY_DB_SYNC_MODE || process.env.DB_SYNC_MODE || 'safe')
-  .trim()
-  .toLowerCase();
 
 identityApp.disable('x-powered-by');
 identityApp.use(cors({
@@ -79,10 +78,20 @@ identityApp.get('/users/health', (_req, res) => {
   });
 });
 
+identityApp.get('/plans/health', (_req, res) => {
+  return res.status(200).json({
+    status: 200,
+    data: {
+      message: 'Identity service plans surface is alive.',
+    },
+  });
+});
+
 // Fase 1 de extraccion:
 // el servicio ya expone auth/users desde un proceso separado,
 // pero sigue reutilizando la logica existente del monolito.
 identityApp.use('/auth', authRoutes);
+identityApp.use('/plans', planRoutes);
 identityApp.use('/users', userRoutes);
 
 identityApp.use((_req, res) => {
@@ -107,9 +116,9 @@ async function startIdentityService() {
       console.warn('Identity service started without database connection because IDENTITY_SKIP_DB_CONNECT=true.');
     } else {
       await db.authenticate();
-      await db.sync({ force: identitySyncMode === 'force' });
       console.log('Identity service database connection established.');
-      console.log(`Identity service schema sync completed in ${identitySyncMode} mode.`);
+      await ensureIdentityDatabaseReady();
+      console.log('Identity service migration readiness check completed.');
     }
 
     identityApp.listen(PORT, () => {

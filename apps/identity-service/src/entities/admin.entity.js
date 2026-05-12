@@ -131,6 +131,30 @@ const Admin = {
     return rows[0]?.total ?? 0;
   },
 
+  async countActive(executor = query) {
+    const { rows } = await executor(
+      `
+        SELECT COUNT(*)::INT AS total
+        FROM admins
+        WHERE is_active = TRUE
+      `,
+    );
+
+    return rows[0]?.total ?? 0;
+  },
+
+  async countInactive(executor = query) {
+    const { rows } = await executor(
+      `
+        SELECT COUNT(*)::INT AS total
+        FROM admins
+        WHERE is_active = FALSE
+      `,
+    );
+
+    return rows[0]?.total ?? 0;
+  },
+
   async update(id, data, executor = query) {
     const fields = MUTABLE_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(data, field));
 
