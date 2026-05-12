@@ -27,7 +27,7 @@ const PORT = getGatewayPort();
 const identityServiceUrl = getIdentityServiceUrl();
 const catalogServiceUrl = getCatalogServiceUrl();
 const platformServiceUrl = getPlatformServiceUrl();
-const IDENTITY_PUBLIC_AUTH_PATHS = new Set([
+const ADMIN_PUBLIC_PATHS = new Set([
   '/api/admin/auth/health',
   '/api/admin/auth/login',
   '/api/admin/auth/forgot-password',
@@ -35,41 +35,17 @@ const IDENTITY_PUBLIC_AUTH_PATHS = new Set([
   '/api/admin/auth/password-action/complete',
   '/api/admin/auth/refresh',
   '/api/admin/auth/logout',
+  '/api/admin/plans/health',
+  '/api/admin/products/health',
   '/api/admin/users/health',
 ]);
-const CATALOG_PUBLIC_PATHS = new Set([
-  '/api/catalog/health',
-  '/api/admin/products/health',
-]);
-const PLATFORM_PUBLIC_PATHS = new Set([
-  '/api/platform/auth/login',
-  '/api/platform/auth/refresh',
-  '/api/platform/auth/logout',
-  '/api/platform/systems/health',
-]);
 
-function isProtectedIdentityRoute(pathname) {
-  if (IDENTITY_PUBLIC_AUTH_PATHS.has(pathname)) {
+function isProtectedAdminRoute(pathname) {
+  if (!pathname.startsWith('/api/admin')) {
     return false;
   }
 
-  if (pathname.startsWith('/api/admin/users')) {
-    return true;
-  }
-
-  if (!pathname.startsWith('/api/admin/auth')) {
-    return false;
-  }
-
-  return !IDENTITY_PUBLIC_AUTH_PATHS.has(pathname);
-}
-
-function isProtectedCatalogRoute(pathname) {
-  if (CATALOG_PUBLIC_PATHS.has(pathname)) {
-    return false;
-  }
-
-  return pathname.startsWith('/api/admin/products');
+  return !ADMIN_PUBLIC_PATHS.has(pathname);
 }
 
 function isPlatformRoute(pathname) {
@@ -98,8 +74,7 @@ gatewayApp.use((req, res, next) => {
   const accessToken = getBearerTokenFromAuthorizationHeader(req.headers.authorization);
   const pathname = req.originalUrl.split('?')[0];
   const isPlatformRequest = isPlatformRoute(pathname);
-  const routeRequiresAuth = isProtectedIdentityRoute(pathname)
-    || isProtectedCatalogRoute(pathname);
+  const routeRequiresAuth = isProtectedAdminRoute(pathname);
   let accessTokenPayload = null;
 
   if (accessToken && !isPlatformRequest) {
@@ -160,7 +135,21 @@ gatewayApp.use(createProxyMiddleware({
 }));
 
 gatewayApp.use(createProxyMiddleware({
+  pathFilter: '/api/admin/plans/**',
+  target: identityServiceUrl,
+  changeOrigin: true,
+  pathRewrite: (path) => path.replace(/^\/api\/admin\/plans/, '/plans'),
+}));
+
+gatewayApp.use(createProxyMiddleware({
   pathFilter: (pathname) => pathname.startsWith('/api/admin/products'),
+  target: catalogServiceUrl,
+  changeOrigin: true,
+  pathRewrite: (path) => path.replace(/^\/api\/admin/, ''),
+}));
+
+gatewayApp.use(createProxyMiddleware({
+  pathFilter: (pathname) => pathname.startsWith('/api/admin/site-content'),
   target: catalogServiceUrl,
   changeOrigin: true,
   pathRewrite: (path) => path.replace(/^\/api\/admin/, ''),
