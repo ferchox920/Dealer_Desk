@@ -7,12 +7,17 @@
   "scripts": {
     "dev": "node --watch src/main.js",
     "start": "node src/main.js",
+    "migrate:create": "node src/scripts/migrations/platform.cli.js create",
+    "migrate:up": "node src/scripts/migrations/platform.cli.js up",
+    "migrate:down": "node src/scripts/migrations/platform.cli.js down",
+    "migrate:status": "node src/scripts/migrations/platform.cli.js status",
     "seed:super-admin": "node src/scripts/seed-super-admin.js"
   },
   "dependencies": {
     "@dealer-desk/shared-config": "1.0.0",
     "@dealer-desk/shared-http": "1.0.0",
     "argon2": "^0.44.0",
+    "cloudinary": "^2.7.0",
     "cors": "^2.8.6",
     "express": "^4.22.1",
     "jsonwebtoken": "^9.0.2",

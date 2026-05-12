@@ -18,7 +18,9 @@ const SYSTEM_PROVISIONING_RUN_SELECT = `
   identity_base_url,
   database_name,
   owner_email,
-  created_at
+  metadata,
+  created_at,
+  updated_at
 `;
 
 const MUTABLE_FIELDS = [
@@ -29,15 +31,16 @@ const MUTABLE_FIELDS = [
   'identity_base_url',
   'database_name',
   'owner_email',
+  'metadata',
 ];
 
-function hydrateSystemProvisioningRun(row) {
+function hydrateSystemProvisioningRun(row, executor = query) {
   if (!row) {
     return null;
   }
 
   return attachRecordMethods(row, {
-    update: async (data, executor) => SystemProvisioningRun.update(row.id, data, executor),
+    update: async (data, nestedExecutor = executor) => SystemProvisioningRun.update(row.id, data, nestedExecutor),
   });
 }
 
@@ -54,19 +57,20 @@ const SystemProvisioningRun = {
       identity_base_url: data.identity_base_url ?? null,
       database_name: data.database_name ?? null,
       owner_email: data.owner_email ?? null,
+      metadata: JSON.stringify(data.metadata ?? {}),
     };
     const { columns, values, placeholders } = buildInsertParts(insertData);
 
     const { rows } = await executor(
       `
-        INSERT INTO system_provisioning_runs (${columns.join(', ')})
+        INSERT INTO platform_system_provisioning_runs (${columns.join(', ')})
         VALUES (${placeholders.join(', ')})
         RETURNING ${SYSTEM_PROVISIONING_RUN_SELECT}
       `,
       values,
     );
 
-    return hydrateSystemProvisioningRun(rows[0]);
+    return hydrateSystemProvisioningRun(rows[0], executor);
   },
 
   async findAllBySystemId(systemId, executor = query) {
@@ -75,14 +79,14 @@ const SystemProvisioningRun = {
     const { rows } = await executor(
       `
         SELECT ${SYSTEM_PROVISIONING_RUN_SELECT}
-        FROM system_provisioning_runs
+        FROM platform_system_provisioning_runs
         WHERE ${where.clause}
         ORDER BY started_at DESC, created_at DESC
       `,
       where.values,
     );
 
-    return rows.map(hydrateSystemProvisioningRun);
+    return rows.map((row) => hydrateSystemProvisioningRun(row, executor));
   },
 
   async findByPk(id, executor = query) {
@@ -91,14 +95,14 @@ const SystemProvisioningRun = {
     const { rows } = await executor(
       `
         SELECT ${SYSTEM_PROVISIONING_RUN_SELECT}
-        FROM system_provisioning_runs
+        FROM platform_system_provisioning_runs
         WHERE ${where.clause}
         LIMIT 1
       `,
       where.values,
     );
 
-    return hydrateSystemProvisioningRun(rows[0]);
+    return hydrateSystemProvisioningRun(rows[0], executor);
   },
 
   async findByIdAndSystemId(id, systemId, executor = query) {
@@ -107,14 +111,14 @@ const SystemProvisioningRun = {
     const { rows } = await executor(
       `
         SELECT ${SYSTEM_PROVISIONING_RUN_SELECT}
-        FROM system_provisioning_runs
+        FROM platform_system_provisioning_runs
         WHERE ${where.clause}
         LIMIT 1
       `,
       where.values,
     );
 
-    return hydrateSystemProvisioningRun(rows[0]);
+    return hydrateSystemProvisioningRun(rows[0], executor);
   },
 
   async update(id, data, executor = query) {
@@ -132,15 +136,15 @@ const SystemProvisioningRun = {
 
     const { rows } = await executor(
       `
-        UPDATE system_provisioning_runs
-        SET ${set.clause}
+        UPDATE platform_system_provisioning_runs
+        SET ${set.clause}, updated_at = NOW()
         WHERE ${where.clause}
         RETURNING ${SYSTEM_PROVISIONING_RUN_SELECT}
       `,
       [...set.values, ...where.values],
     );
 
-    return hydrateSystemProvisioningRun(rows[0]);
+    return hydrateSystemProvisioningRun(rows[0], executor);
   },
 };
 

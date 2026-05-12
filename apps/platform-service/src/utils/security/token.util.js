@@ -46,11 +46,16 @@ function generateOpaqueRefreshToken() {
   return crypto.randomBytes(48).toString('hex');
 }
 
+function generateOpaqueToken(size = 48) {
+  return crypto.randomBytes(size).toString('hex');
+}
+
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
 export {
+  generateOpaqueToken,
   generateOpaqueRefreshToken,
   sha256,
   signAccessToken,

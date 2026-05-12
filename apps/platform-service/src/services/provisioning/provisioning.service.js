@@ -1,4 +1,5 @@
 import db from '../../config/db/db.js';
+import PlatformSystemEvent from '../../entities/system-event.entity.js';
 import System from '../../entities/system.entity.js';
 import SystemProvisioningRun from '../../entities/system-provisioning-run.entity.js';
 import { createHttpError } from '../../utils/errors/app-error.util.js';
@@ -34,17 +35,16 @@ class ProvisioningService {
 
     const normalizedPayload = normalizeProvisionPayload(payload);
 
-    const completedRun = await db.withTransaction(async (client) => {
+    return await db.withTransaction(async (client) => {
       const executor = client.query.bind(client);
-
-      await System.update(systemId, {
-        status: 'provisioning',
-      }, executor);
-
       const run = await SystemProvisioningRun.create({
         system_id: systemId,
         status: 'running',
         ...normalizedPayload,
+        metadata: {
+          requested_admin_panel_url: normalizedPayload.admin_panel_url,
+          requested_public_site_url: normalizedPayload.public_site_url,
+        },
       }, executor);
 
       const finalizedRun = await SystemProvisioningRun.update(run.id, {
@@ -53,16 +53,24 @@ class ProvisioningService {
         ...normalizedPayload,
       }, executor);
 
-      await System.update(systemId, {
-        status: 'active',
-        admin_panel_url: normalizedPayload.admin_panel_url ?? system.admin_panel_url,
-        public_site_url: normalizedPayload.public_site_url ?? system.public_site_url,
-      }, executor);
+      await PlatformSystemEvent.create(
+        {
+          system_id: systemId,
+          event_type: 'provisioning_run_completed',
+          message: 'Provisioning run completed.',
+          metadata: {
+            provisioning_run_id: finalizedRun.id,
+            catalog_base_url: finalizedRun.catalog_base_url,
+            identity_base_url: finalizedRun.identity_base_url,
+            database_name: finalizedRun.database_name,
+            owner_email: finalizedRun.owner_email,
+          },
+        },
+        executor,
+      );
 
       return finalizedRun;
     });
-
-    return completedRun;
   }
 
   async getProvisioningRuns(systemId) {

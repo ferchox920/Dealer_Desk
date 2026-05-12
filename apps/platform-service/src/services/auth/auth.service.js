@@ -1,13 +1,12 @@
-import { v4 as uuidv4 } from 'uuid';
 import db from '../../config/db/db.js';
 import PlatformAdmin from '../../entities/platform-admin.entity.js';
+import PlatformRefreshSession from '../../entities/platform-refresh-session.entity.js';
 import { createHttpError } from '../../utils/errors/app-error.util.js';
 import { trimBoundaryWhitespace } from '../../utils/normalizers/string-normalizer.util.js';
 import { serializePlatformAdmin } from '../../utils/serializers/platform-admin.serializer.js';
 import { verifyPassword } from '../../utils/security/password.util.js';
 import {
   generateOpaqueRefreshToken,
-  sha256,
   signAccessToken,
 } from '../../utils/security/token.util.js';
 
@@ -23,56 +22,6 @@ function buildRefreshTokenExpiryDate() {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + Number(process.env.PLATFORM_REFRESH_TOKEN_TTL_DAYS || process.env.REFRESH_TOKEN_TTL_DAYS || 30));
   return expiresAt;
-}
-
-async function createRefreshSession(client, { adminId, refreshToken, userAgent, ipAddress, expiresAt }) {
-  const tokenHash = sha256(refreshToken);
-
-  await client.query(
-    `
-      INSERT INTO platform_refresh_sessions (
-        id, platform_admin_id, token_hash, user_agent, ip_address, expires_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `,
-    [
-      uuidv4(),
-      adminId,
-      tokenHash,
-      userAgent ?? null,
-      ipAddress ?? null,
-      expiresAt,
-    ],
-  );
-}
-
-async function findRefreshSessionForUpdate(client, refreshToken) {
-  const tokenHash = sha256(refreshToken);
-
-  const { rows } = await client.query(
-    `
-      SELECT id, platform_admin_id, expires_at, revoked_at
-      FROM platform_refresh_sessions
-      WHERE token_hash = $1
-      LIMIT 1
-      FOR UPDATE
-    `,
-    [tokenHash],
-  );
-
-  return rows[0] ?? null;
-}
-
-async function revokeRefreshSession(client, sessionId) {
-  await client.query(
-    `
-      UPDATE platform_refresh_sessions
-      SET revoked_at = COALESCE(revoked_at, NOW()),
-          last_used_at = NOW()
-      WHERE id = $1
-    `,
-    [sessionId],
-  );
 }
 
 class AuthService {
@@ -95,13 +44,13 @@ class AuthService {
     const expiresAt = buildRefreshTokenExpiryDate();
 
     await db.withTransaction(async (client) => {
-      await createRefreshSession(client, {
-        adminId: admin.id,
-        refreshToken,
-        userAgent,
-        ipAddress,
-        expiresAt,
-      });
+      await PlatformRefreshSession.create({
+        platform_admin_id: admin.id,
+        refresh_token: refreshToken,
+        user_agent: userAgent,
+        ip_address: ipAddress,
+        expires_at: expiresAt,
+      }, client.query.bind(client));
 
       await client.query(
         `
@@ -129,7 +78,10 @@ class AuthService {
     }
 
     return await db.withTransaction(async (client) => {
-      const session = await findRefreshSessionForUpdate(client, refreshToken);
+      const session = await PlatformRefreshSession.findByPlainTokenForUpdate(
+        refreshToken,
+        client.query.bind(client),
+      );
 
       if (!session) {
         throw createHttpError(401, 'Invalid refresh token.', 'PLATFORM_REFRESH_TOKEN_INVALID');
@@ -152,14 +104,14 @@ class AuthService {
       const newRefreshToken = generateOpaqueRefreshToken();
       const newExpiresAt = buildRefreshTokenExpiryDate();
 
-      await revokeRefreshSession(client, session.id);
-      await createRefreshSession(client, {
-        adminId: admin.id,
-        refreshToken: newRefreshToken,
-        userAgent,
-        ipAddress,
-        expiresAt: newExpiresAt,
-      });
+      await PlatformRefreshSession.revokeById(session.id, client.query.bind(client));
+      await PlatformRefreshSession.create({
+        platform_admin_id: admin.id,
+        refresh_token: newRefreshToken,
+        user_agent: userAgent,
+        ip_address: ipAddress,
+        expires_at: newExpiresAt,
+      }, client.query.bind(client));
 
       return {
         accessToken: signAccessToken(admin),
@@ -174,15 +126,7 @@ class AuthService {
       return;
     }
 
-    await db.query(
-      `
-        UPDATE platform_refresh_sessions
-        SET revoked_at = COALESCE(revoked_at, NOW()),
-            last_used_at = NOW()
-        WHERE token_hash = $1
-      `,
-      [sha256(refreshToken)],
-    );
+    await PlatformRefreshSession.revokeByPlainToken(refreshToken);
   }
 
   async getCurrentAdmin(adminId) {

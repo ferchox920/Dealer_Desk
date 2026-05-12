@@ -2,6 +2,7 @@ import '@dealer-desk/shared-config/load-env';
 import db from '../config/db/db.js';
 import PlatformAdmin from '../entities/platform-admin.entity.js';
 import { SUPER_ADMIN_ROLE } from '../constants/platform-roles.js';
+import { ensurePlatformDatabaseReady } from '../utils/db/migration-runtime.util.js';
 import { hashPassword } from '../utils/security/password.util.js';
 
 const DEFAULT_EMAIL = 'platform@dealerdesk.local';
@@ -10,7 +11,7 @@ const DEFAULT_PASSWORD = 'DealerDeskPlatform123!';
 
 async function run() {
   await db.authenticate();
-  await db.sync();
+  await ensurePlatformDatabaseReady();
 
   const email = (process.env.PLATFORM_SUPER_ADMIN_EMAIL || DEFAULT_EMAIL).trim().toLowerCase();
   const name = (process.env.PLATFORM_SUPER_ADMIN_NAME || DEFAULT_NAME).trim();

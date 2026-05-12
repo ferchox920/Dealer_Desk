@@ -4,9 +4,13 @@ import cors from 'cors';
 import morgan from 'morgan';
 import authRoutes from './routes/auth/auth.routes.js';
 import db from './config/db/db.js';
+import catalogRoutes from './routes/catalogs/catalog.routes.js';
+import internalAdminPlanRoutes from './routes/internal/admin-plan.routes.js';
+import runtimeRoutes from './routes/runtime/runtime.routes.js';
 import systemRoutes from './routes/systems/system.routes.js';
 import { requireInternalRequest } from './middlewares/http/require-internal-request.js';
 import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
+import { ensurePlatformDatabaseReady } from './utils/db/migration-runtime.util.js';
 import {
   getAllowedOrigin,
   getPlatformServicePort,
@@ -18,9 +22,6 @@ import {
 
 const platformApp = express();
 const PORT = getPlatformServicePort();
-const platformSyncMode = (process.env.PLATFORM_DB_SYNC_MODE || process.env.DB_SYNC_MODE || 'safe')
-  .trim()
-  .toLowerCase();
 
 platformApp.disable('x-powered-by');
 platformApp.use(cors({
@@ -56,6 +57,9 @@ platformApp.get('/systems/health', (_req, res) => {
 });
 
 platformApp.use('/auth', authRoutes);
+platformApp.use(catalogRoutes);
+platformApp.use(internalAdminPlanRoutes);
+platformApp.use(runtimeRoutes);
 platformApp.use(systemRoutes);
 
 platformApp.use((_req, res) => {
@@ -77,15 +81,21 @@ platformApp.use((error, _req, res, _next) => {
 async function startPlatformService() {
   try {
     await db.authenticate();
-    await db.sync({ force: platformSyncMode === 'force' });
+    await ensurePlatformDatabaseReady();
     console.log('Platform service database connection established.');
-    console.log(`Platform service schema sync completed in ${platformSyncMode} mode.`);
+    console.log('Platform service migration readiness check completed.');
 
     platformApp.listen(PORT, () => {
       console.log(`Platform service running on port ${PORT}`);
     });
   } catch (error) {
-    console.error('Error starting platform service:', error.message);
+    const startupMessage = typeof error?.message === 'string' && error.message.trim().length > 0
+      ? error.message
+      : error?.code === 'ECONNREFUSED'
+        ? 'Platform service could not connect to PostgreSQL.'
+        : 'Unknown platform service startup error.';
+
+    console.error('Error starting platform service:', startupMessage);
     process.exit(1);
   }
 }
