@@ -16,6 +16,8 @@ import {
   PRODUCT_YEAR_MIN,
   getProductYearMax,
 } from '../../../constants/product-ranges.js';
+import { PRODUCT_DESCRIPTION_MAX_LENGTH } from '../../../constants/product-description.js';
+import { PRODUCT_VIN_MAX_LENGTH } from '../../../constants/product-vin.js';
 
 const REQUIRED_PRODUCT_FIELDS = [
   'year',
@@ -31,6 +33,8 @@ const MAX_PUBLIC_CATALOG_LIMIT = 60;
 const MAX_PUBLIC_COLLECTION_LIMIT = 24;
 const ALLOWED_PUBLIC_CATALOG_SORT_FIELDS = ['created_at', 'price', 'year'];
 const ALLOWED_PUBLIC_CATALOG_SORT_DIRECTIONS = ['asc', 'desc'];
+const PRODUCT_SHORT_TEXT_MAX_LENGTH = 255;
+const SUPPORTED_PUBLIC_LANGUAGES = ['en', 'es'];
 
 function validateRequiredField(body, field, errors) {
   if (body[field] !== undefined) {
@@ -90,6 +94,118 @@ function normalizeProductBody(body, errors) {
 function validateString(body, field, errors) {
   if (body[field] !== undefined && typeof body[field] !== 'string') {
     errors.push({ code: `PRODUCT_${field.toUpperCase()}_NOT_STRING`, field, message: `The ${field} must be a string.` });
+  }
+}
+
+function validateVinNumber(body, field, errors) {
+  if (body[field] === undefined) {
+    return;
+  }
+
+  if (typeof body[field] !== 'string') {
+    errors.push({
+      code: 'PRODUCT_VIN_NUMBER_NOT_STRING',
+      field,
+      message: 'The vin_number must be a string.',
+    });
+    return;
+  }
+
+  const normalizedValue = body[field].trim();
+
+  if (normalizedValue.length === 0) {
+    errors.push({
+      code: 'PRODUCT_VIN_NUMBER_REQUIRED',
+      field,
+      message: 'The vin_number is required.',
+    });
+    return;
+  }
+
+  if (normalizedValue.length > PRODUCT_VIN_MAX_LENGTH) {
+    errors.push({
+      code: 'PRODUCT_VIN_NUMBER_TOO_LONG',
+      field,
+      message: `The vin_number cannot be longer than ${PRODUCT_VIN_MAX_LENGTH} characters because a VIN uses at most ${PRODUCT_VIN_MAX_LENGTH} characters.`,
+    });
+  }
+}
+
+function validateDescription(body, field, errors) {
+  if (body[field] === undefined) {
+    return;
+  }
+
+  if (typeof body[field] !== 'string') {
+    errors.push({
+      code: 'PRODUCT_DESCRIPTION_NOT_STRING',
+      field,
+      message: 'The description must be a string.',
+    });
+    return;
+  }
+
+  if (body[field].trim().length > PRODUCT_DESCRIPTION_MAX_LENGTH) {
+    errors.push({
+      code: 'PRODUCT_DESCRIPTION_TOO_LONG',
+      field,
+      message: `The description cannot be longer than ${PRODUCT_DESCRIPTION_MAX_LENGTH} characters.`,
+    });
+  }
+}
+
+function validateLocalizedText(body, field, errors, options = {}) {
+  const {
+    allowEmpty = true,
+    maxLength = PRODUCT_SHORT_TEXT_MAX_LENGTH,
+  } = options;
+
+  if (body[field] === undefined) {
+    return;
+  }
+
+  if (!body[field] || typeof body[field] !== 'object' || Array.isArray(body[field])) {
+    errors.push({
+      code: `PRODUCT_${field.toUpperCase()}_INVALID`,
+      field,
+      message: `The ${field} must be an object.`,
+    });
+    return;
+  }
+
+  const values = body[field].values && typeof body[field].values === 'object' && !Array.isArray(body[field].values)
+    ? body[field].values
+    : body[field];
+
+  for (const language of SUPPORTED_PUBLIC_LANGUAGES) {
+    const localizedValue = values[language];
+
+    if (localizedValue !== undefined && typeof localizedValue !== 'string') {
+      errors.push({
+        code: `PRODUCT_${field.toUpperCase()}_${language.toUpperCase()}_INVALID`,
+        field: `${field}.${language}`,
+        message: `The ${field}.${language} value must be a string.`,
+      });
+      continue;
+    }
+
+    const trimmedValue = String(localizedValue || '').trim();
+
+    if (!allowEmpty && trimmedValue.length === 0) {
+      errors.push({
+        code: `PRODUCT_${field.toUpperCase()}_${language.toUpperCase()}_REQUIRED`,
+        field: `${field}.${language}`,
+        message: `The ${field}.${language} value is required.`,
+      });
+    }
+
+    if (trimmedValue.length > maxLength) {
+      errors.push({
+        code: `PRODUCT_${field.toUpperCase()}_${language.toUpperCase()}_TOO_LONG`,
+        field: `${field}.${language}`,
+        message: `The ${field}.${language} value cannot be longer than ${maxLength} characters.`,
+      });
+    }
   }
 }
 
@@ -248,9 +364,19 @@ function validateProductPayload(body, errors, { requireAllFields = false } = {})
   validateString(body, 'brand', errors);
   validateString(body, 'model', errors);
   validateString(body, 'drive_train', errors);
+  validateLocalizedText(body, 'drive_train_i18n', errors, {
+    maxLength: PRODUCT_SHORT_TEXT_MAX_LENGTH,
+  });
   validateString(body, 'fuel_type', errors);
-  validateString(body, 'vin_number', errors);
-  validateString(body, 'description', errors);
+  validateLocalizedText(body, 'fuel_type_i18n', errors, {
+    maxLength: PRODUCT_SHORT_TEXT_MAX_LENGTH,
+  });
+  validateVinNumber(body, 'vin_number', errors);
+  validateDescription(body, 'description', errors);
+  validateLocalizedText(body, 'description_i18n', errors, {
+    allowEmpty: true,
+    maxLength: PRODUCT_DESCRIPTION_MAX_LENGTH,
+  });
   validateCurrencyCode(body, 'currency_code', errors);
 }
 

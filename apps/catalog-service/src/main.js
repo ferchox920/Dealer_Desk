@@ -3,11 +3,17 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import db from './config/db/db.js';
+import internalLoginBackgroundRoutes from './routes/login-background/internal-login-background.routes.js';
+import publicLoginBackgroundRoutes from './routes/login-background/public-login-background.routes.js';
 import publicCatalogRoutes from './routes/public/public-catalog.routes.js';
+import internalPlanRoutes from './routes/internal/internal-plan.routes.js';
 import productRoutes from './routes/products/product.routes.js';
 import productImageRoutes from './routes/product-images/product-image.routes.js';
+import adminSiteContentRoutes from './routes/site-content/admin-site-content.routes.js';
+import publicSiteContentRoutes from './routes/site-content/public-site-content.routes.js';
 import { trimRequestStrings } from './middlewares/http/trim-request-strings.js';
 import { requireInternalRequest } from './middlewares/http/require-internal-request.js';
+import { ensureCatalogDatabaseReady } from './utils/db/migration-runtime.util.js';
 import {
   getAllowedOrigin,
   getCatalogServicePort,
@@ -19,9 +25,12 @@ import {
 
 const catalogApp = express();
 const PORT = getCatalogServicePort();
-const catalogSyncMode = (process.env.CATALOG_DB_SYNC_MODE || process.env.DB_SYNC_MODE || 'safe')
-  .trim()
-  .toLowerCase();
+
+function warnAboutDeprecatedSyncEnv() {
+  if (process.env.CATALOG_DB_SYNC_MODE || process.env.DB_SYNC_MODE) {
+    console.warn('Catalog sync env vars are deprecated. Run npm run migrate:up in @dealer-desk/catalog-service.');
+  }
+}
 
 catalogApp.disable('x-powered-by');
 catalogApp.use(cors({
@@ -57,8 +66,13 @@ catalogApp.get('/products/health', (_req, res) => {
 });
 
 catalogApp.use(publicCatalogRoutes);
+catalogApp.use(publicLoginBackgroundRoutes);
+catalogApp.use(publicSiteContentRoutes);
+catalogApp.use(internalLoginBackgroundRoutes);
+catalogApp.use(internalPlanRoutes);
 catalogApp.use(productRoutes);
 catalogApp.use(productImageRoutes);
+catalogApp.use(adminSiteContentRoutes);
 
 catalogApp.use((_req, res) => {
   return sendErrorResponse(res, {
@@ -78,10 +92,11 @@ catalogApp.use((error, _req, res, _next) => {
 
 async function startCatalogService() {
   try {
+    warnAboutDeprecatedSyncEnv();
     await db.authenticate();
-    await db.sync({ force: catalogSyncMode === 'force' });
+    await ensureCatalogDatabaseReady();
     console.log('Catalog service database connection established.');
-    console.log(`Catalog service schema sync completed in ${catalogSyncMode} mode.`);
+    console.log('Catalog service migrations checked.');
 
     catalogApp.listen(PORT, () => {
       console.log(`Catalog service running on port ${PORT}`);

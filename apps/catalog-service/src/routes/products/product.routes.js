@@ -130,6 +130,24 @@ productRoutes.post('/products/:id/mark-available', validateProductId, async (req
   }
 });
 
+productRoutes.post('/products/:id/feature', validateProductId, async (req, res) => {
+  try {
+    const product = await productService.feature(req.params.id);
+    return res.status(200).json({ status: 200, data: product });
+  } catch (error) {
+    return sendProductError(res, error);
+  }
+});
+
+productRoutes.post('/products/:id/unfeature', validateProductId, async (req, res) => {
+  try {
+    const product = await productService.unfeature(req.params.id);
+    return res.status(200).json({ status: 200, data: product });
+  } catch (error) {
+    return sendProductError(res, error);
+  }
+});
+
 productRoutes.delete('/products/:id', validateProductId, async (req, res) => {
   try {
     const product = await productService.delete(req.params.id);

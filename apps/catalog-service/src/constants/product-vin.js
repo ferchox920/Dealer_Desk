@@ -1,0 +1,3 @@
+const PRODUCT_VIN_MAX_LENGTH = 17;
+
+export { PRODUCT_VIN_MAX_LENGTH };

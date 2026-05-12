@@ -1,14 +1,3 @@
-// ============================================================================
-// product.entity.js
-//
-// Acceso SQL para la tabla "products". Es el equivalente a un Model de Sequelize.
-// Cada método ejecuta queries parametrizadas y devuelve objetos con métodos
-// .update() y .destroy() adjuntos (gracias a hydrateProduct).
-//
-// También incluye funciones para cargar imágenes relacionadas, evitando
-// el problema N+1 (una query por producto) al hacer un solo SELECT con ANY().
-// ============================================================================
-
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../config/db/db.js';
 import {
@@ -19,9 +8,6 @@ import {
   buildWhereEqualsClause,
 } from './helpers.entity.js';
 
-// Columnas que se devuelven en cada SELECT/RETURNING de productos.
-// Se reutiliza en todos los métodos para no repetir la lista.
-// (En Sequelize esto era automático con attributes o el modelo.)
 const PRODUCT_SELECT = `
   id,
   internal_code,
@@ -32,22 +18,20 @@ const PRODUCT_SELECT = `
   price,
   currency_code,
   drive_train,
+  drive_train_i18n,
   fuel_type,
+  fuel_type_i18n,
   vin_number,
   description,
+  description_i18n,
   publish_status,
   sale_status,
+  is_featured,
+  featured_at,
   created_at,
   updated_at
 `;
-const PUBLIC_PRODUCT_BASE_WHERE = `
-  publish_status = 'published'
-  AND sale_status = 'available'
-`;
 
-// Campos que se pueden modificar con update().
-// Si alguien intenta meter "id" o "created_at" en un update, se ignora.
-// (En Sequelize esto se controlaba con el atributo readOnly o hooks.)
 const MUTABLE_FIELDS = [
   'year',
   'brand',
@@ -56,16 +40,18 @@ const MUTABLE_FIELDS = [
   'price',
   'currency_code',
   'drive_train',
+  'drive_train_i18n',
   'fuel_type',
+  'fuel_type_i18n',
   'vin_number',
   'description',
+  'description_i18n',
   'publish_status',
   'sale_status',
+  'is_featured',
+  'featured_at',
 ];
 
-// Toma una fila cruda de PostgreSQL y le adjunta métodos .update() y .destroy().
-// Esto te permite hacer: const p = await Product.findByPk(id); await p.update({...});
-// Similar a como los modelos de Sequelize devolvían instancias con métodos.
 function hydrateProduct(row) {
   if (!row) return null;
 
@@ -75,20 +61,12 @@ function hydrateProduct(row) {
   });
 }
 
-// Carga las imágenes de un solo producto.
-// Se usa en findByPk cuando pides include de imágenes.
-// coverOnly=true filtra solo la imagen de portada (is_cover=TRUE).
-//
-// SQL generado (ejemplo):
-//   SELECT ... FROM product_images WHERE product_id = $1 ORDER BY sort_order ASC
-//
-// En Sequelize esto era: Product.findByPk(id, { include: [{ model: ProductImage }] })
-async function loadProductImages(productId, coverOnly = false) {
+async function loadProductImages(productId, coverOnly = false, executor = query) {
   const where = buildWhereEqualsClause({ product_id: productId });
   const coverFilter = coverOnly ? 'AND is_cover = TRUE' : '';
   const orderClause = coverOnly ? '' : 'ORDER BY sort_order ASC';
 
-  const { rows } = await query(
+  const { rows } = await executor(
     `
       SELECT
         id,
@@ -109,17 +87,7 @@ async function loadProductImages(productId, coverOnly = false) {
   return rows;
 }
 
-// Carga las imágenes de VARIOS productos en UNA sola query.
-// Evita el problema N+1: en vez de hacer 1 query por cada producto,
-// hace 1 sola query con WHERE product_id = ANY($1::uuid[]).
-//
-// ANY($1::uuid[]) es la forma de PostgreSQL de hacer "WHERE x IN (lista)".
-// Se le pasa un array de UUIDs y PostgreSQL los filtra todos de una vez.
-//
-// Después agrupa las imágenes por producto en un Map para asignarlas.
-//
-// En Sequelize esto se hacía internamente cuando ponías include con eager loading.
-async function loadImagesByProductIds(productIds, coverOnly = false) {
+async function loadImagesByProductIds(productIds, coverOnly = false, executor = query) {
   if (productIds.length === 0) {
     return new Map();
   }
@@ -127,7 +95,7 @@ async function loadImagesByProductIds(productIds, coverOnly = false) {
   const coverFilter = coverOnly ? 'AND is_cover = TRUE' : '';
   const orderClause = coverOnly ? '' : 'ORDER BY product_id ASC, sort_order ASC';
 
-  const { rows } = await query(
+  const { rows } = await executor(
     `
       SELECT
         id,
@@ -156,20 +124,57 @@ async function loadImagesByProductIds(productIds, coverOnly = false) {
   return imagesByProductId;
 }
 
-// Revisa si el llamador pidió incluir imágenes en las options.
-// Acepta el mismo formato que usábamos en Sequelize: { include: [{ model: ... }] }
+async function loadImageCountsByProductIds(productIds, executor = query) {
+  if (productIds.length === 0) {
+    return new Map();
+  }
+
+  const { rows } = await executor(
+    `
+      SELECT
+        product_id,
+        COUNT(*)::integer AS image_count
+      FROM product_images
+      WHERE product_id = ANY(${buildPlaceholder(1)}::uuid[])
+      GROUP BY product_id
+    `,
+    [productIds],
+  );
+
+  return new Map(rows.map((row) => [row.product_id, row.image_count]));
+}
+
+async function attachImageCounts(products, executor = query) {
+  const imageCountsByProductId = await loadImageCountsByProductIds(
+    products.map((product) => product.id),
+    executor,
+  );
+
+  for (const product of products) {
+    product.image_count = imageCountsByProductId.get(product.id) ?? 0;
+  }
+
+  return products;
+}
+
 function shouldIncludeImages(options = {}) {
   return Array.isArray(options.include) && options.include.length > 0;
 }
 
-// Revisa si las options piden solo la imagen de portada (is_cover: true).
 function coverOnlyFromOptions(options = {}) {
   const firstInclude = options.include?.[0];
   return firstInclude?.where?.is_cover === true;
 }
 
+function buildPublicVisibilityClause() {
+  return `
+    publish_status = 'published'
+    AND sale_status <> 'unavailable'
+  `;
+}
+
 function buildPublicFilters(options = {}) {
-  const clauses = [PUBLIC_PRODUCT_BASE_WHERE];
+  const clauses = [buildPublicVisibilityClause()];
   const values = [];
 
   if (typeof options.brand === 'string' && options.brand.trim().length > 0) {
@@ -249,7 +254,7 @@ function buildPublicExcludeIdsClause(excludeIds = [], startIndex = 1) {
   };
 }
 
-async function attachIncludedImages(products, options = {}) {
+async function attachIncludedImages(products, options = {}, executor = query) {
   if (!shouldIncludeImages(options) || products.length === 0) {
     return products;
   }
@@ -257,6 +262,7 @@ async function attachIncludedImages(products, options = {}) {
   const imagesByProductId = await loadImagesByProductIds(
     products.map((product) => product.id),
     coverOnlyFromOptions(options),
+    executor,
   );
 
   for (const product of products) {
@@ -266,26 +272,19 @@ async function attachIncludedImages(products, options = {}) {
   return products;
 }
 
-async function buildPublicCollection(rows, options = {}) {
+async function buildPublicCollection(rows, options = {}, executor = query) {
   const products = rows.map((row) => {
     const product = hydrateProduct(row);
     product.images = [];
     return product;
   });
 
-  return await attachIncludedImages(products, options);
+  await attachImageCounts(products, executor);
+  return await attachIncludedImages(products, options, executor);
 }
 
 const Product = {
-  // Crea un producto nuevo en la DB y devuelve el registro completo.
-  //
-  // SQL generado:
-  //   INSERT INTO products (id, year, brand, ...) VALUES ($1, $2, $3, ...)
-  //   RETURNING id, year, brand, ...
-  //
-  // RETURNING hace que PostgreSQL devuelva la fila insertada sin necesidad
-  // de un SELECT extra. En Sequelize esto lo hacía automáticamente .create().
-  async create(data) {
+  async create(data, executor = query) {
     const insertData = {
       id: uuidv4(),
       year: data.year,
@@ -295,15 +294,20 @@ const Product = {
       price: data.price,
       currency_code: data.currency_code ?? 'USD',
       drive_train: data.drive_train,
+      drive_train_i18n: data.drive_train_i18n,
       fuel_type: data.fuel_type,
+      fuel_type_i18n: data.fuel_type_i18n,
       vin_number: data.vin_number,
       description: data.description ?? null,
+      description_i18n: data.description_i18n,
       publish_status: 'draft',
       sale_status: 'available',
+      is_featured: false,
+      featured_at: null,
     };
     const { columns, values, placeholders } = buildInsertParts(insertData);
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         INSERT INTO products (${columns.join(', ')})
         VALUES (${placeholders.join(', ')})
@@ -315,17 +319,8 @@ const Product = {
     return hydrateProduct(rows[0]);
   },
 
-  // Trae todos los productos. Opcionalmente incluye sus imágenes.
-  //
-  // Estrategia: primero trae todos los productos, luego (si se pidió)
-  // carga todas las imágenes de esos productos en UNA sola query.
-  // Esto evita hacer un JOIN grande o N+1 queries.
-  //
-  // En Sequelize: Product.findAll({ include: [{ model: ProductImage }] })
-  async findAll(options = {}) {
-    // Traemos productos primero y luego sus imágenes.
-    // Es más simple de entender que un JOIN grande y mantiene la respuesta parecida a Sequelize.
-    const { rows } = await query(`
+  async findAll(options = {}, executor = query) {
+    const { rows } = await executor(`
       SELECT ${PRODUCT_SELECT}
       FROM products
     `);
@@ -336,6 +331,8 @@ const Product = {
       return product;
     });
 
+    await attachImageCounts(products, executor);
+
     if (!shouldIncludeImages(options)) {
       return products;
     }
@@ -343,6 +340,7 @@ const Product = {
     const imagesByProductId = await loadImagesByProductIds(
       products.map((product) => product.id),
       coverOnlyFromOptions(options),
+      executor,
     );
 
     for (const product of products) {
@@ -352,15 +350,10 @@ const Product = {
     return products;
   },
 
-  // Busca un producto por su UUID. Opcionalmente incluye sus imágenes.
-  //
-  // SQL: SELECT ... FROM products WHERE id = $1 LIMIT 1
-  //
-  // En Sequelize: Product.findByPk(id, { include: [{ model: ProductImage }] })
-  async findByPk(id, options = {}) {
+  async findByPk(id, options = {}, executor = query) {
     const where = buildWhereEqualsClause({ id });
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         SELECT ${PRODUCT_SELECT}
         FROM products
@@ -376,17 +369,19 @@ const Product = {
       return null;
     }
 
+    product.image_count = (await loadImageCountsByProductIds([id], executor)).get(id) ?? 0;
+
     if (!shouldIncludeImages(options)) {
       return product;
     }
 
-    product.images = await loadProductImages(id, coverOnlyFromOptions(options));
+    product.images = await loadProductImages(id, coverOnlyFromOptions(options), executor);
     return product;
   },
 
-  async findPublicCatalog(options = {}) {
+  async findPublicCatalog(options = {}, executor = query) {
     const filters = buildPublicFilters(options);
-    const { rows: countRows } = await query(
+    const { rows: countRows } = await executor(
       `
         SELECT COUNT(*)::int AS total
         FROM products
@@ -395,7 +390,7 @@ const Product = {
       filters.values.slice(0, -2),
     );
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         SELECT ${PRODUCT_SELECT}
         FROM products
@@ -407,7 +402,7 @@ const Product = {
       filters.values,
     );
 
-    const products = await buildPublicCollection(rows, options);
+    const products = await buildPublicCollection(rows, options, executor);
 
     return {
       items: products,
@@ -415,15 +410,15 @@ const Product = {
     };
   },
 
-  async findPublicByPk(id, options = {}) {
+  async findPublicByPk(id, options = {}, executor = query) {
     const where = buildWhereEqualsClause({ id });
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         SELECT ${PRODUCT_SELECT}
         FROM products
         WHERE ${where.clause}
-          AND ${PUBLIC_PRODUCT_BASE_WHERE}
+          AND ${buildPublicVisibilityClause()}
         LIMIT 1
       `,
       where.values,
@@ -435,20 +430,22 @@ const Product = {
       return null;
     }
 
+    product.image_count = (await loadImageCountsByProductIds([id], executor)).get(id) ?? 0;
+
     if (!shouldIncludeImages(options)) {
       return product;
     }
 
-    product.images = await loadProductImages(id, coverOnlyFromOptions(options));
+    product.images = await loadProductImages(id, coverOnlyFromOptions(options), executor);
     return product;
   },
 
-  async findPublicBrands() {
-    const { rows } = await query(
+  async findPublicBrands(executor = query) {
+    const { rows } = await executor(
       `
         SELECT brand, COUNT(*)::int AS total
         FROM products
-        WHERE ${PUBLIC_PRODUCT_BASE_WHERE}
+        WHERE ${buildPublicVisibilityClause()}
         GROUP BY brand
         ORDER BY brand ASC
       `,
@@ -457,16 +454,16 @@ const Product = {
     return rows;
   },
 
-  async findPublicModelsByBrand(brand) {
+  async findPublicModelsByBrand(brand, executor = query) {
     const values = [];
-    const clauses = [PUBLIC_PRODUCT_BASE_WHERE];
+    const clauses = [buildPublicVisibilityClause()];
 
     if (typeof brand === 'string' && brand.trim().length > 0) {
       values.push(brand.trim().toLowerCase());
       clauses.push(`LOWER(brand) = ${buildPlaceholder(values.length)}`);
     }
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         SELECT model, COUNT(*)::int AS total
         FROM products
@@ -480,33 +477,34 @@ const Product = {
     return rows;
   },
 
-  async findPublicFeatured(options = {}) {
+  async findPublicFeatured(options = {}, executor = query) {
     const limit = typeof options.limit === 'number' ? options.limit : 6;
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         SELECT ${PRODUCT_SELECT}
         FROM products
-        WHERE ${PUBLIC_PRODUCT_BASE_WHERE}
-        ORDER BY year DESC, created_at DESC, price DESC
+        WHERE is_featured = TRUE
+          AND ${buildPublicVisibilityClause()}
+        ORDER BY featured_at DESC NULLS LAST, created_at DESC
         LIMIT ${buildPlaceholder(1)}
       `,
       [limit],
     );
 
-    return await buildPublicCollection(rows, options);
+    return await buildPublicCollection(rows, options, executor);
   },
 
-  async findPublicRecent(options = {}) {
+  async findPublicRecent(options = {}, executor = query) {
     const limit = typeof options.limit === 'number' ? options.limit : 6;
     const excludeIds = buildPublicExcludeIdsClause(options.excludeIds, 2);
     const values = [limit, ...excludeIds.values];
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         SELECT ${PRODUCT_SELECT}
         FROM products
-        WHERE ${PUBLIC_PRODUCT_BASE_WHERE}
+        WHERE ${buildPublicVisibilityClause()}
         ${excludeIds.clause}
         ORDER BY created_at DESC
         LIMIT ${buildPlaceholder(1)}
@@ -514,10 +512,10 @@ const Product = {
       values,
     );
 
-    return await buildPublicCollection(rows, options);
+    return await buildPublicCollection(rows, options, executor);
   },
 
-  async findPublicSimilar(options = {}) {
+  async findPublicSimilar(options = {}, executor = query) {
     const limit = typeof options.limit === 'number' ? options.limit : 4;
     const values = [
       options.productId,
@@ -527,11 +525,11 @@ const Product = {
       limit,
     ];
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         SELECT ${PRODUCT_SELECT}
         FROM products
-        WHERE ${PUBLIC_PRODUCT_BASE_WHERE}
+        WHERE ${buildPublicVisibilityClause()}
           AND id <> ${buildPlaceholder(1)}
           AND LOWER(brand) = ${buildPlaceholder(2)}
         ORDER BY
@@ -546,7 +544,7 @@ const Product = {
       values,
     );
 
-    const primaryMatches = await buildPublicCollection(rows, options);
+    const primaryMatches = await buildPublicCollection(rows, options, executor);
 
     if (primaryMatches.length >= limit) {
       return primaryMatches;
@@ -559,28 +557,52 @@ const Product = {
         options.productId,
         ...primaryMatches.map((product) => product.id),
       ],
-    });
+    }, executor);
 
     return [...primaryMatches, ...fallbackMatches];
   },
 
-  // Actualiza solo los campos permitidos (MUTABLE_FIELDS) de un producto.
-  // Si no se envía ningún campo válido, devuelve el producto sin tocarlo.
-  //
-  // SQL (ejemplo parcial):
-  //   UPDATE products SET brand = $1, price = $2, updated_at = NOW() WHERE id = $3
-  //   RETURNING ...
-  //
-  // Nota: startIndex en buildUpdateSetClause empieza en 1 (para $1, $2...)
-  // y luego buildWhereEqualsClause continúa desde set.values.length + 1 (para $3, $4...)
-  // Así los placeholders no se pisan entre sí.
-  //
-  // En Sequelize: product.update({ brand: 'Toyota' })
-  async update(id, data) {
+  async countFeatured(executor = query) {
+    const { rows } = await executor(
+      `
+        SELECT COUNT(*)::integer AS count
+        FROM products
+        WHERE is_featured = TRUE
+      `,
+    );
+
+    return rows[0]?.count ?? 0;
+  },
+
+  async countActiveForPlan(executor = query) {
+    const { rows } = await executor(
+      `
+        SELECT COUNT(*)::integer AS count
+        FROM products
+        WHERE sale_status <> 'unavailable'
+      `,
+    );
+
+    return rows[0]?.count ?? 0;
+  },
+
+  async countInactiveForPlan(executor = query) {
+    const { rows } = await executor(
+      `
+        SELECT COUNT(*)::integer AS count
+        FROM products
+        WHERE sale_status = 'unavailable'
+      `,
+    );
+
+    return rows[0]?.count ?? 0;
+  },
+
+  async update(id, data, executor = query) {
     const fields = MUTABLE_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(data, field));
 
     if (fields.length === 0) {
-      return await this.findByPk(id);
+      return await this.findByPk(id, {}, executor);
     }
 
     const set = buildUpdateSetClause(
@@ -589,7 +611,7 @@ const Product = {
     );
     const where = buildWhereEqualsClause({ id }, set.values.length + 1);
 
-    const { rows } = await query(
+    const { rows } = await executor(
       `
         UPDATE products
         SET ${set.clause}, updated_at = NOW()
@@ -602,13 +624,6 @@ const Product = {
     return hydrateProduct(rows[0]);
   },
 
-  // Elimina un producto por UUID y devuelve el registro eliminado.
-  // Las imágenes se eliminan automáticamente por ON DELETE CASCADE en PostgreSQL.
-  // (Pero ojo: Cloudinary no se limpia aquí, eso lo hace el service).
-  //
-  // SQL: DELETE FROM products WHERE id = $1 RETURNING ...
-  //
-  // En Sequelize: product.destroy()
   async deleteById(id, executor = query) {
     const where = buildWhereEqualsClause({ id });
 

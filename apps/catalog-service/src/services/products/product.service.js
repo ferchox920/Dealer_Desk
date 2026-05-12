@@ -13,6 +13,8 @@ import {
 } from '../../utils/serializers/public-product.serializer.js';
 import { destroyCloudinaryAssetsBestEffort } from '../../utils/cloudinary/destroy-cloudinary-assets.util.js';
 
+const SUPPORTED_PUBLIC_LANGUAGES = ['en', 'es'];
+
 function buildPriceOutOfRangeMessage(currencyCode, range) {
   return `The price must be between ${range.min} and ${range.max} for ${currencyCode}.`;
 }
@@ -35,6 +37,76 @@ function assertPriceWithinCurrencyRange(currencyCode, price) {
       'PRODUCT_PRICE_OUT_OF_RANGE',
     );
   }
+}
+
+function clearFeaturedState() {
+  return {
+    is_featured: false,
+    featured_at: null,
+  };
+}
+
+function normalizeShortText(value) {
+  return String(value || '').trim();
+}
+
+function normalizeLocalizedTextField(value, fallbackValue = '') {
+  const rawValues = value && typeof value === 'object' && !Array.isArray(value)
+    ? (value.values && typeof value.values === 'object' && !Array.isArray(value.values)
+      ? value.values
+      : value)
+    : {};
+
+  return Object.fromEntries(
+    SUPPORTED_PUBLIC_LANGUAGES.map((language) => [
+      language,
+      normalizeShortText(rawValues[language] ?? fallbackValue),
+    ]),
+  );
+}
+
+function getLocalizedTextSourceValue(localizedField, fallbackValue = '') {
+  if (!localizedField || typeof localizedField !== 'object') {
+    return normalizeShortText(fallbackValue);
+  }
+
+  return normalizeShortText(localizedField.es || localizedField.en || fallbackValue);
+}
+
+function buildProductLocalizedFields(data, currentProduct = null) {
+  const driveTrainField = normalizeLocalizedTextField(
+    data.drive_train_i18n ?? currentProduct?.drive_train_i18n,
+    data.drive_train ?? currentProduct?.drive_train ?? '',
+  );
+  const fuelTypeField = normalizeLocalizedTextField(
+    data.fuel_type_i18n ?? currentProduct?.fuel_type_i18n,
+    data.fuel_type ?? currentProduct?.fuel_type ?? '',
+  );
+  const descriptionField = normalizeLocalizedTextField(
+    data.description_i18n ?? currentProduct?.description_i18n,
+    data.description ?? currentProduct?.description ?? '',
+  );
+  const driveTrain = getLocalizedTextSourceValue(
+    driveTrainField,
+    data.drive_train ?? currentProduct?.drive_train,
+  );
+  const fuelType = getLocalizedTextSourceValue(
+    fuelTypeField,
+    data.fuel_type ?? currentProduct?.fuel_type,
+  );
+  const description = getLocalizedTextSourceValue(
+    descriptionField,
+    data.description ?? currentProduct?.description,
+  );
+
+  return {
+    drive_train: driveTrain,
+    drive_train_i18n: driveTrainField,
+    fuel_type: fuelType,
+    fuel_type_i18n: fuelTypeField,
+    description: description || null,
+    description_i18n: descriptionField,
+  };
 }
 
 class ProductService {
@@ -65,10 +137,12 @@ class ProductService {
     );
 
     assertPriceWithinCurrencyRange(effectiveCurrency, safeData.price);
+    const localizedFields = buildProductLocalizedFields(safeData);
 
     return await Product.create({
       ...safeData,
       currency_code: effectiveCurrency,
+      ...localizedFields,
     });
   }
 
@@ -225,12 +299,14 @@ class ProductService {
     const effectivePrice = safeData.price ?? product.price;
 
     assertPriceWithinCurrencyRange(effectiveCurrency, effectivePrice);
+    const localizedFields = buildProductLocalizedFields(safeData, product);
 
     return await product.update({
       ...safeData,
       currency_code: safeData.currency_code !== undefined
         ? effectiveCurrency
         : safeData.currency_code,
+      ...localizedFields,
     });
   }
 
@@ -255,6 +331,7 @@ class ProductService {
 
     return await product.update({
       publish_status: 'draft',
+      ...clearFeaturedState(),
     });
   }
 
@@ -272,6 +349,7 @@ class ProductService {
     return await product.update({
       publish_status: 'draft',
       sale_status: 'available',
+      ...clearFeaturedState(),
     });
   }
 
@@ -281,6 +359,7 @@ class ProductService {
     return await product.update({
       publish_status: 'draft',
       sale_status: 'unavailable',
+      ...clearFeaturedState(),
     });
   }
 
@@ -348,6 +427,51 @@ class ProductService {
     );
 
     return deletedProduct;
+  }
+
+  async feature(id) {
+    return await db.withTransaction(async (client) => {
+      const executor = client.query.bind(client);
+
+      await executor('LOCK TABLE products IN SHARE ROW EXCLUSIVE MODE');
+
+      const product = await Product.findByPk(id, {}, executor);
+
+      if (!product) {
+        throw createHttpError(404, 'Product not found.', 'PRODUCT_NOT_FOUND');
+      }
+
+      if (product.publish_status !== 'published') {
+        throw createHttpError(
+          409,
+          'Only published products can be featured.',
+          'PRODUCT_FEATURE_REQUIRES_PUBLISHED',
+        );
+      }
+
+      if (!product.is_featured) {
+        const featuredCount = await Product.countFeatured(executor);
+
+        if (featuredCount >= 9) {
+          throw createHttpError(
+            409,
+            'You can only keep 9 featured products at the same time.',
+            'PRODUCT_FEATURE_LIMIT_REACHED',
+          );
+        }
+      }
+
+      return await Product.update(product.id, {
+        is_featured: true,
+        featured_at: new Date(),
+      }, executor);
+    });
+  }
+
+  async unfeature(id) {
+    const product = await this.requireProduct(id);
+
+    return await product.update(clearFeaturedState());
   }
 }
 

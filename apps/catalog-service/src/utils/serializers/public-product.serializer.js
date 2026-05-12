@@ -53,6 +53,9 @@ function serializePublicCatalogCard(product) {
       drive_train: product.drive_train,
       fuel_type: product.fuel_type,
     },
+    is_featured: product.is_featured === true,
+    featured_at: product.featured_at ?? null,
+    image_count: product.image_count ?? null,
     cover_image: buildCoverImage(product),
     publish_status: product.publish_status,
     sale_status: product.sale_status,
@@ -82,6 +85,9 @@ function serializePublicCatalogDetail(product) {
       vin_number: product.vin_number,
     },
     description: product.description,
+    is_featured: product.is_featured === true,
+    featured_at: product.featured_at ?? null,
+    image_count: product.image_count ?? null,
     cover_image: buildCoverImage(product),
     gallery: Array.isArray(product.images)
       ? product.images.map((image) => ({

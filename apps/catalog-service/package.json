@@ -6,7 +6,11 @@
   "main": "src/main.js",
   "scripts": {
     "dev": "node --watch src/main.js",
-    "start": "node src/main.js"
+    "start": "node src/main.js",
+    "migrate:create": "node src/scripts/migrations/catalog.cli.js create",
+    "migrate:up": "node src/scripts/migrations/catalog.cli.js up",
+    "migrate:down": "node src/scripts/migrations/catalog.cli.js down",
+    "migrate:status": "node src/scripts/migrations/catalog.cli.js status"
   },
   "dependencies": {
     "@dealer-desk/shared-auth": "1.0.0",
